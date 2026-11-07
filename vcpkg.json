@@ -1,0 +1,19 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "name": "skybuild",
+    "version-string": "0.0.1",
+    "dependencies": [
+        "directxmath",
+        "directxtk",
+        "fmt",
+        "lz4",
+        "minhook",
+        "nlohmann-json",
+        "rapidcsv",
+        "recastnavigation",
+        "simpleini",
+        "spdlog",
+        "toml11",
+        "xbyak"
+    ]
+}

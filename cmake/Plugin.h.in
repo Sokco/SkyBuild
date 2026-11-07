@@ -1,0 +1,20 @@
+#pragma once
+
+#include <cstdint>
+#include <string_view>
+
+namespace Plugin
+{
+    inline constexpr std::string_view Name = "@PLUGIN_NAME@";
+    inline constexpr std::string_view Author = "@PLUGIN_AUTHOR@";
+    inline constexpr std::string_view Version = "@PROJECT_VERSION@";
+
+    inline constexpr std::uint16_t VersionMajor =
+        @PROJECT_VERSION_MAJOR@;
+
+    inline constexpr std::uint16_t VersionMinor =
+        @PROJECT_VERSION_MINOR@;
+
+    inline constexpr std::uint16_t VersionPatch =
+        @PROJECT_VERSION_PATCH@;
+}

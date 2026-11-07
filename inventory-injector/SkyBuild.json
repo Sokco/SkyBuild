@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Exit-9B/InventoryInjector/main/docs/InventoryInjector.schema.json",
+  "rules": [
+    {
+      "match": {
+        "formId": "SkyBuild.esp|005900"
+      },
+      "assign": {
+        "iconSource": "AIT/MoreIcons/icons.swf",
+        "iconLabel": "tool_hammer"
+      }
+    }
+  ]
+}
