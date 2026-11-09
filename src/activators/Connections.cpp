@@ -152,7 +152,15 @@ void Publish(RE::FormID itemSource = 0, RE::FormID connectionSource = 0) {
   if (auto *target = Resolve(itemSource);
       target && target->GetBaseObject()->As<RE::TESObjectCONT>())
     CollectItems(*next, target);
-  std::ranges::sort(next->sources, {}, &Object::name);
+  std::ranges::sort(next->sources, [](const Object &a, const Object &b) {
+    return a.name != b.name ? a.name < b.name : a.id < b.id;
+  });
+  std::map<std::string, std::size_t> nameCounts;
+  for (const auto &object : next->sources)
+    ++nameCounts[object.name];
+  for (auto &object : next->sources)
+    if (nameCounts.at(object.name) > 1)
+      object.name = std::format("{} ({:08X})", object.name, object.id);
   view.store(std::move(next));
 }
 void Edit(RE::FormID source, std::optional<std::string> nameDraft = {}) {
@@ -622,11 +630,14 @@ void __stdcall DrawEditor() {
       TableSetColumnIndex(0);
       BeginChild("Objects", {0, -1}, ImGuiChildFlags_AlwaysUseWindowPadding);
       W::Section("Nearby usable objects");
-      for (const auto &object : current->sources)
+      for (const auto &object : current->sources) {
+        PushID(static_cast<int>(object.id));
         if (W::SidebarItem(object.name.c_str(), selected == object.id)) {
           RequestEditPump();
           select(object.id);
         }
+        PopID();
+      }
       EndChild();
       TableSetColumnIndex(1);
       BeginChild("PropertyFields", {0, -1},
