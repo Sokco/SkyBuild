@@ -37,6 +37,7 @@ inline Bindings GamepadDefaults() {
 struct Values : Bindings {
   Bindings gamepad{GamepadDefaults()};
   bool sandboxMode{false};
+  bool showBuildingMaterialNames{true};
   float buildingCostMultiplier{1.F};
   bool quickSelectMainMenu{false}, quickSelectToolMenu{true};
   float terrainStrengthPerSecond{Terrain::BrushStrengthPerSecond};

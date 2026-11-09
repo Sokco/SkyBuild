@@ -607,11 +607,18 @@ void __stdcall Draw() {
   End();
   if (showCosts) {
     constexpr float iconSize = 42.F, gap = 7.F, spacing = 20.F;
+    const bool showNames = Settings::ShowBuildingMaterialNames();
+    const auto costLabel = [showNames](const BuildCosts::Requirement &cost) {
+      auto label = std::to_string(cost.material.amount);
+      if (showNames && !cost.name.empty())
+        label += " " + cost.name;
+      return label;
+    };
     float contentWidth = 0;
     for (const auto &cost : *s.requirements)
       contentWidth +=
           iconSize + gap +
-          CalcTextSize(std::to_string(cost.material.amount).c_str()).x +
+          CalcTextSize(costLabel(cost).c_str()).x +
           spacing;
     contentWidth = std::max(0.F, contentWidth - spacing);
     const float panelWidth =
@@ -627,7 +634,7 @@ void __stdcall Draw() {
             ".resources", cost.material.plugin, cost.material.local);
         SetCursorScreenPos({x, origin.y + (60.F - iconSize) * .5F});
         Widgets::Picture(Widgets::Root() / path, iconSize);
-        const auto text = std::to_string(cost.material.amount);
+        const auto text = costLabel(cost);
         const auto extent = CalcTextSize(text.c_str());
         ImDrawListManager::AddText(
             GetWindowDrawList(),

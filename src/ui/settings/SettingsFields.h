@@ -204,6 +204,9 @@ inline bool Gameplay(Values &values) {
   namespace W = UI::Widgets;
   bool changed = Checkbox("Sandbox mode", &values.sandboxMode);
   W::Help("Build freely without spending or refunding materials.");
+  W::SpaceBefore();
+  changed |= Checkbox("Show building cost material names",
+                      &values.showBuildingMaterialNames);
   BeginDisabled(values.sandboxMode);
   W::FieldLabel("Building cost multiplier");
   changed |= SliderFloat("##BuildingCostMultiplier",

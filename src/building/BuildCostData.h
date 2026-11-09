@@ -29,6 +29,7 @@ struct Material {
 struct Requirement {
   Material material;
   int available{};
+  std::string name;
   bool Affordable() const { return available >= material.amount; }
 };
 inline std::vector<Material> ScaleCosts(const std::vector<Material> &materials,

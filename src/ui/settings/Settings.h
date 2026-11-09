@@ -1,6 +1,7 @@
 #pragma once
 namespace SkyBuild::Settings {
 bool SandboxMode();
+bool ShowBuildingMaterialNames();
 float BuildingCostMultiplier();
 bool QuickSelectMainMenu();
 bool QuickSelectToolMenu();

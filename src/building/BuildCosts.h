@@ -80,7 +80,8 @@ CheckAvailability(const std::vector<Material> &materials) {
     resolved.push_back(item);
     if (item)
       items.insert(item);
-    result.push_back({material, 0});
+    const auto *name = item ? item->GetName() : nullptr;
+    result.push_back({material, 0, name && *name ? name : ""});
   }
   if (!player || items.empty())
     return result;

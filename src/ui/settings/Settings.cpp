@@ -26,6 +26,7 @@
 namespace SkyBuild::Settings {
 namespace {
 std::atomic_bool sandboxMode{false};
+std::atomic_bool showBuildingMaterialNames{true};
 std::atomic<float> buildingCostMultiplier{1.F};
 std::atomic_bool quickMain{false}, quickTools{true};
 struct Key {
@@ -271,6 +272,7 @@ const Key *FindKey(std::uint32_t code) {
 std::filesystem::path Path() { return Paths::Root() / "SkyBuildSettings.json"; }
 void Apply(const Values &values) {
   sandboxMode.store(values.sandboxMode);
+  showBuildingMaterialNames.store(values.showBuildingMaterialNames);
   buildingCostMultiplier.store(values.buildingCostMultiplier);
   const auto *controls = RE::ControlMap::GetSingleton();
   UI::Widgets::SetGamepadIcons(controls && controls->GetGamePadType() ==
@@ -380,6 +382,7 @@ void Save() {
     auto json = nlohmann::json{
         {"terrainStrengthPerSecond", draft.terrainStrengthPerSecond},
         {"sandboxMode", draft.sandboxMode},
+        {"showBuildingMaterialNames", draft.showBuildingMaterialNames},
         {"buildingCostMultiplier", draft.buildingCostMultiplier},
         {"gamepadBindings", BindingJSON(draft.gamepad)},
         {"quickSelectMainMenu", draft.quickSelectMainMenu},
@@ -785,6 +788,7 @@ void __stdcall RenderAdvanced() {
 }
 
 bool SandboxMode() { return sandboxMode.load(); }
+bool ShowBuildingMaterialNames() { return showBuildingMaterialNames.load(); }
 float BuildingCostMultiplier() { return buildingCostMultiplier.load(); }
 bool QuickSelectMainMenu() { return quickMain.load(); }
 bool QuickSelectToolMenu() { return quickTools.load(); }
@@ -804,6 +808,7 @@ void Initialize() {
           }))
         loaded.gamepad = GamepadDefaults();
       loaded.sandboxMode = json.value("sandboxMode", false);
+      loaded.showBuildingMaterialNames = json.value("showBuildingMaterialNames", true);
       loaded.buildingCostMultiplier = json.value("buildingCostMultiplier", 1.F);
       loaded.quickSelectMainMenu = json.value("quickSelectMainMenu", false);
       loaded.quickSelectToolMenu = json.value("quickSelectToolMenu", true);
