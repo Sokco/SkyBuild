@@ -908,8 +908,8 @@ bool CopyGeneratedForPreparation(
   // Native preparation runs after opening the original view in a ready pause.
   // Recapture current portals/cuts, including newly streamed neighboring cells.
   {
-    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-    const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+    const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
     const RE::BSWriteLockGuard publicationGuard(*publication.get());
     const RE::BSReadLockGuard listingGuard(*listing.get());
     if (!CaptureOriginals(cell)) {
@@ -1083,8 +1083,8 @@ bool CapturePendingBaseline(void *) noexcept {
     const auto cell = RE::TESForm::LookupByID<RE::TESObjectCELL>(id);
     if (!sceneLoaded || !generationEnabled || !cell || !cell->IsAttached())
       throw std::runtime_error("Baseline cell is no longer attached");
-    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-    const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+    const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
     const RE::BSWriteLockGuard publicationGuard(*publication.get());
     const RE::BSReadLockGuard listingGuard(*listing.get());
     if (!CaptureOriginals(cell))

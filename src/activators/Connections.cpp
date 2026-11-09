@@ -829,8 +829,7 @@ bool HasTarget() {
 bool HandleButton(RE::ButtonEvent *button) {
   using namespace ControlBindings;
   const auto match = [&](const auto &binding) {
-    return button->GetDevice() == binding.device &&
-           button->GetIDCode() == binding.code;
+    return ControlBindings::Matches(*button, binding);
   };
   if (!IsConnecting())
     return false;

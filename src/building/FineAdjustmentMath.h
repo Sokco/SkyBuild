@@ -21,6 +21,14 @@ inline Vector PlacementForward(float x, float y, float yaw,
   const auto local = CardinalForward(x * c - y * s, x * s + y * c);
   return {local[0] * c + local[1] * s, -local[0] * s + local[1] * c, 0};
 }
+// Post-multiply so each increment follows the object's current local axes.
+template <class Matrix>
+void RotateLocal(Matrix &rotation, int axis, float angle) {
+  Matrix increment;
+  increment.MakeRotation(angle, axis == 0 ? 1.F : 0.F,
+                         axis == 1 ? 1.F : 0.F, axis == 2 ? 1.F : 0.F);
+  rotation = rotation * increment;
+}
 inline float StepScale(float scale, int direction) {
   return std::clamp(std::round((scale + 0.05F * direction) * 20.0F) / 20.0F,
                     0.05F, 10.0F);

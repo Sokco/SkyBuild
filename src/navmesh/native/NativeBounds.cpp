@@ -18,7 +18,7 @@ struct OwnedUncompressed {
   Uncompressed value;
   ~OwnedUncompressed() {
     using Destroy = void (*)(Uncompressed *);
-    const REL::Relocation<Destroy> destroy{REL::ID(91282)};
+    const REL::Relocation<Destroy> destroy{REL::RelocationID(88833, 91282)};
     destroy(&value);
   }
 };
@@ -41,7 +41,7 @@ std::array<float, 6> BuildNativeBounds(RE::BSNavmeshInfo &info,
     }
   }
   using Setup = void (*)(RE::BSNavmeshInfo *, const Uncompressed *);
-  const REL::Relocation<Setup> setup{REL::ID(91226)};
+  const REL::Relocation<Setup> setup{REL::RelocationID(88780, 91226)};
   setup(&info, &source);
   if (!info.bounds)
     throw std::runtime_error("Native bounds allocation failed");
@@ -55,14 +55,14 @@ std::string ValidateNativeBounds(const RE::BSNavmeshInfo &info,
   OwnedUncompressed decoded;
   using Decode =
       void (*)(const RE::BSCompressedNavmeshBounds *, Uncompressed *);
-  const REL::Relocation<Decode> decode{REL::ID(91295)};
+  const REL::Relocation<Decode> decode{REL::RelocationID(88845, 91295)};
   decode(info.bounds, &decoded.value);
   if (decoded.value.limits != expected || decoded.value.triangles ||
       decoded.value.vertices || decoded.value.triangleCount ||
       decoded.value.vertexCount)
     return "Native conservative bounds payload mismatch";
   using Contains = bool (*)(const Uncompressed *, const RE::NiPoint3 *);
-  const REL::Relocation<Contains> contains{REL::ID(91287)};
+  const REL::Relocation<Contains> contains{REL::RelocationID(88837, 91287)};
   for (const auto &vertex : mesh.vertices)
     if (!contains(&decoded.value, &vertex.location))
       return "Native bounds exclude a mesh vertex";

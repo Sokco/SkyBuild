@@ -333,8 +333,8 @@ ReadyDeferredConnections(const std::set<RE::FormID> &cells) {
   const auto pending = deferredTargets.load(std::memory_order_acquire);
   if (!live.load() || !pending || pending->empty())
     return ready;
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
   const RE::BSReadLockGuard publicationGuard(*publication.get());
   const RE::BSReadLockGuard listingGuard(*listing.get());
   for (const auto id : *pending) {
@@ -376,8 +376,8 @@ bool ReclaimRetiredBuffers() noexcept {
   try {
     using Coordinator = void *(*)();
     using Ready = bool (*)(void *);
-    const REL::Relocation<Coordinator> coordinator{REL::ID(30584)};
-    const REL::Relocation<Ready> ready{REL::ID(91403)};
+    const REL::Relocation<Coordinator> coordinator{REL::RelocationID(29765, 30584)};
+    const REL::Relocation<Ready> ready{REL::RelocationID(88948, 91403)};
     if (!ready(coordinator())) {
       Report("Retirement audit requires a ready native navigation pause.");
       return false;
@@ -390,11 +390,11 @@ bool ReclaimRetiredBuffers() noexcept {
              "active.");
       return false;
     }
-    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)},
-        listing{REL::ID(402042)};
+    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)},
+        listing{REL::RelocationID(515945, 402042)};
     const RE::BSWriteLockGuard publicationGuard(*publication.get());
     const RE::BSReadLockGuard listingGuard(*listing.get());
-    const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::ID(402040)};
+    const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::RelocationID(515943, 402040)};
     auto *registry = static_cast<RE::NavMeshInfoMap *>(*global.get());
     if (!registry)
       return false;

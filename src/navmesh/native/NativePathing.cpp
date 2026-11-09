@@ -47,10 +47,10 @@ bool Refresh(void *context, bool allAttached) noexcept {
       return fail("player cell is not attached during transition");
     if (!processes || !pathing)
       return fail("native process/pathing singleton unavailable");
-    const REL::Relocation<RE::BSFixedString *> name{REL::ID(412228)};
+    const REL::Relocation<RE::BSFixedString *> name{REL::RelocationID(525747, 412228)};
     const REL::Relocation<std::uintptr_t> expected{
         RE::VTABLE_MovementAgentPathFollowerStandard[4]};
-    const REL::Relocation<std::uintptr_t> refresh{REL::ID(90737)};
+    const REL::Relocation<std::uintptr_t> refresh{REL::RelocationID(88326, 90737)};
     if (!name.get()->data() ||
         reinterpret_cast<const std::uintptr_t *>(expected.address())[1] !=
             refresh.address()) {

@@ -97,8 +97,8 @@ bool NativePublication::SealRetired(std::string &error) {
     error = "Retirement requires a restored exposed graph and a ready pause";
     return false;
   }
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
   const RE::BSWriteLockGuard publicationGuard(*publication.get());
   const RE::BSReadLockGuard listingGuard(*listing.get());
   const RE::BSReadLockGuard registryGuard(registry->mapLock);

@@ -44,7 +44,7 @@ NativeCutSnapshot CaptureNativeCuts(
                  !ids.insert(mesh->QNavmeshID()).second || !mesh->QNavmeshID()))
       throw std::runtime_error("Repeated or missing native cut mesh identity");
   NativeCutSnapshot snapshot;
-  const REL::Relocation<std::uintptr_t> undoVtable{REL::ID(246891)};
+  const REL::Relocation<std::uintptr_t> undoVtable{REL::RelocationID(295732, 246891)};
   std::size_t undoBudget{}, valueBudget{};
   for (const auto &mesh : loaded) {
     if (!mesh)
@@ -175,7 +175,7 @@ NativeCutSnapshot CaptureNativeCuts(
 std::set<const RE::BSNavmesh *>
 CaptureCutBorrowedTargets(const std::vector<const RE::BSNavmesh *> &sources) {
   std::set<const RE::BSNavmesh *> visited, targets;
-  const REL::Relocation<std::uintptr_t> table{REL::ID(246891)};
+  const REL::Relocation<std::uintptr_t> table{REL::RelocationID(295732, 246891)};
   std::size_t records{}, edges{};
   for (const auto *mesh : sources) {
     if (!mesh || !visited.insert(mesh).second)

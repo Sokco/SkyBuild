@@ -63,7 +63,7 @@ bool Initialize() {
     spdlog::error("Native path candidate view unavailable: {}", error.what());
     return false;
   }
-  const REL::Relocation<std::uintptr_t> target{REL::ID(30578)};
+  const REL::Relocation<std::uintptr_t> target{REL::RelocationID(29755, 30578)};
   auto *address = reinterpret_cast<void *>(target.address());
   if (MH_CreateHook(address, reinterpret_cast<void *>(&EnumerateValid),
                     reinterpret_cast<void **>(&enumerate)) != MH_OK)
@@ -72,7 +72,7 @@ bool Initialize() {
     MH_RemoveHook(address);
     return false;
   }
-  const REL::Relocation<std::uintptr_t> pathTarget{REL::ID(30696)};
+  const REL::Relocation<std::uintptr_t> pathTarget{REL::RelocationID(29887, 30696)};
   auto *pathAddress = reinterpret_cast<void *>(pathTarget.address());
   if (MH_CreateHook(pathAddress,
                     reinterpret_cast<void *>(&EnumeratePathCandidates),

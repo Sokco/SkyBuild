@@ -1,5 +1,10 @@
 #pragma once
-#include "ShellVoxelizer.h"
+#include "models/ModelData.h"
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <map>
+#include <stdexcept>
 #include <d2d1.h>
 #include <wrl/client.h>
 
@@ -11,7 +16,7 @@ struct FootprintResult {
 
 // All triangles have the same winding in projection. Nonzero fill therefore
 // measures their union, including overlaps between front and back faces.
-inline FootprintResult AnalyzeFootprint(const Mesh &mesh,
+inline FootprintResult AnalyzeFootprint(const Models::Mesh &mesh,
                                         const std::atomic_bool &cancel) {
   using Microsoft::WRL::ComPtr;
   const auto check = [](HRESULT hr) {
@@ -25,7 +30,7 @@ inline FootprintResult AnalyzeFootprint(const Mesh &mesh,
   };
   std::array<double, 3> low{INFINITY, INFINITY, INFINITY},
       high{-INFINITY, -INFINITY, -INFINITY};
-  std::map<std::string, std::vector<const Triangle *>> surfaces;
+  std::map<std::string, std::vector<const Models::Triangle *>> surfaces;
   for (const auto &triangle : mesh.triangles) {
     checkCancelled();
     if (triangle.texture >= mesh.textures.size())

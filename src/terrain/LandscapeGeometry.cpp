@@ -7,8 +7,8 @@ LandscapeIndices(RE::BSTriShape *geometry,
   if (renderer->rawIndexData)
     return renderer->rawIndexData;
   const auto &counts = geometry->GetTrishapeRuntimeData();
-  const REL::Relocation<std::uintptr_t *> sharedBuffer{REL::ID(400927)};
-  const REL::Relocation<const std::uint16_t **> sharedIndices{REL::ID(400928)};
+  const REL::Relocation<std::uintptr_t *> sharedBuffer{REL::RelocationID(514769, 400927)};
+  const REL::Relocation<const std::uint16_t **> sharedIndices{REL::RelocationID(514770, 400928)};
   const auto wrapper = *sharedBuffer;
   if (counts.vertexCount != 289 || counts.triangleCount != 512 || !wrapper ||
       *reinterpret_cast<void **>(wrapper) !=

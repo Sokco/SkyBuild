@@ -40,8 +40,8 @@ template <class A, class B> bool SameMap(const A &a, const B &b) {
 bool NativePublication::ReadyForPublication() {
   using Coordinator = void *(*)();
   using Ready = bool (*)(void *);
-  const REL::Relocation<Coordinator> coordinator{REL::ID(30584)};
-  const REL::Relocation<Ready> ready{REL::ID(91403)};
+  const REL::Relocation<Coordinator> coordinator{REL::RelocationID(29765, 30584)};
+  const REL::Relocation<Ready> ready{REL::RelocationID(88948, 91403)};
   const auto audit = NativeSearchAudit::Snapshot();
   return audit.available && !audit.active && ready(coordinator());
 }
@@ -93,12 +93,12 @@ NativePublication::Prepare(std::unique_ptr<NativeGraphDraft> graph,
     result = std::make_unique<NativePublication>();
     timing.Mark("staged graph validation");
     result->graph = std::move(graph);
-    const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::ID(402040)};
+    const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::RelocationID(515943, 402040)};
     result->registry = static_cast<RE::NavMeshInfoMap *>(*global.get());
     if (!result->registry)
       throw std::runtime_error("Missing native registry");
-    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-    const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+    const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
     const RE::BSWriteLockGuard publicationGuard(*publication.get());
     const RE::BSReadLockGuard listingGuard(*listing.get());
     const RE::BSReadLockGuard registryGuard(result->registry->mapLock);
@@ -345,7 +345,7 @@ NativePublication::Prepare(std::unique_ptr<NativeGraphDraft> graph,
               throw std::runtime_error(
                   "Failure capture lost the caller's native pause");
             const REL::Relocation<RE::BSReadWriteLock *> publication{
-                REL::ID(402045)};
+                REL::RelocationID(515948, 402045)};
             RE::BSWriteLockGuard captureGuard{*publication.get()};
             RE::BSTArray<RE::BSTSmartPointer<RE::BSNavmesh>> cohort;
             for (const auto &[id, draft] : retained->forms)
@@ -402,7 +402,7 @@ void NativePublication::PrepareRoutes(
   // Validate links actually used by each affected route. Changes to unused
   // adjacency do not invalidate cached routes.
   const REL::Relocation<RE::BSPrecomputedNavmeshInfoPathMap **> routeGlobal{
-      REL::ID(412218)};
+      REL::RelocationID(525737, 412218)};
   if (*routeGlobal.get() !=
       static_cast<RE::BSPrecomputedNavmeshInfoPathMap *>(registry))
     throw std::runtime_error(
@@ -731,8 +731,8 @@ bool NativePublication::Commit(std::string &error) {
     error = "Navigation is not paused and idle";
     return false;
   }
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
   const RE::BSWriteLockGuard publicationGuard(*publication.get());
   // A restored replacement has already been exposed to native cut updates.
   // Its immutable staging geometry is no longer a valid live invariant.
@@ -762,8 +762,8 @@ bool NativePublication::Commit(std::string &error) {
 bool NativePublication::NeedsMembershipReconciliation() const {
   if (!installed)
     return false;
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
   const RE::BSReadLockGuard publicationGuard(*publication.get());
   const RE::BSReadLockGuard listingGuard(*listing.get());
   for (const auto &cell : cells)
@@ -779,8 +779,8 @@ bool NativePublication::ReconcileMembership(std::string &error) {
         "Membership reconciliation requires an installed graph and ready pause";
     return false;
   }
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
   const RE::BSWriteLockGuard publicationGuard(*publication.get());
   const RE::BSWriteLockGuard listingGuard(*listing.get());
   const RE::BSWriteLockGuard registryGuard(registry->mapLock);
@@ -813,8 +813,8 @@ bool NativePublication::Restore(std::string &error) {
     error = "Navigation is not paused and idle";
     return false;
   }
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
   const RE::BSWriteLockGuard publicationGuard(*publication.get());
   // The published graph is now engine-owned mutable navigation: normal cut
   // processing can change its undo state or geometry. Restoration needs the
@@ -893,11 +893,11 @@ void NativePublication::AppendCutSources(
 bool NativePublication::StillPublished() const {
   if (!installed || !ReadyForPublication())
     return false;
-  const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::ID(402040)};
+  const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::RelocationID(515943, 402040)};
   if (static_cast<RE::NavMeshInfoMap *>(*global.get()) != registry)
     return false;
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
   const RE::BSWriteLockGuard publicationGuard(*publication.get());
   const RE::BSReadLockGuard listingGuard(*listing.get());
   const RE::BSReadLockGuard registryGuard(registry->mapLock);
@@ -1008,7 +1008,7 @@ std::string NativePublication::ValidateInstalled() const {
   const auto pathing = RE::Pathing::GetSingleton();
   if (!pathing)
     return "Missing pathing manager";
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
   const RE::BSWriteLockGuard publicationGuard(*publication.get());
   RE::BSTArray<RE::BSTSmartPointer<RE::BSNavmesh>> loaded;
   if (!pathing->GetAllLoadedNavmeshes5(loaded))
@@ -1021,7 +1021,7 @@ std::string NativePublication::ValidateInstalled() const {
     if (!actual.contains(static_cast<RE::BSNavmesh *>(draft->form.get())))
       return "Published mesh is absent from native loaded enumeration";
   const RE::BSWriteLockGuard listingGuard(
-      *REL::Relocation<RE::BSReadWriteLock *>{REL::ID(402042)}.get());
+      *REL::Relocation<RE::BSReadWriteLock *>{REL::RelocationID(515945, 402042)}.get());
   const RE::BSReadLockGuard registryGuard(registry->mapLock);
   return Preflight(true);
 }

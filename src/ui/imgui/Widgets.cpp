@@ -8,19 +8,53 @@
 #include <mutex>
 #include <unordered_map>
 namespace SkyBuild::UI::Widgets {
+namespace {
+ImGuiWindow *backChild{};
+bool backHandledByNavigation{};
+}
+void PrepareGamepadNavigation() {
+  const auto &context = *ImGui::GetCurrentContext();
+  backChild = nullptr;
+  backHandledByNavigation = context.ActiveId != 0 || context.NavLayer != ImGuiNavLayer_Main;
+  if (context.OpenPopupStack.Size && context.OpenPopupStack.back().Window &&
+      !(context.OpenPopupStack.back().Window->Flags & ImGuiWindowFlags_Modal))
+    backHandledByNavigation = true;
+  if (!backHandledByNavigation && context.NavWindow &&
+      (context.NavWindow->Flags & ImGuiWindowFlags_ChildWindow)) {
+    backChild = context.NavWindow;
+    backHandledByNavigation = true;
+  }
+}
 bool EscapePressed() {
   static int handledFrame = -1;
   const int frame = ImGui::GetFrameCount();
   if (handledFrame == frame ||
-      !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
-      !ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+      !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
     return false;
+  const bool escape = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+  const bool back = ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+  if (!escape && !back) return false;
   handledFrame = frame;
+  if (!escape && backHandledByNavigation) {
+    // ImGui already handles ordinary children; modal children need the same step.
+    auto &context = *ImGui::GetCurrentContext();
+    if (backChild && context.NavWindow == backChild && backChild->ParentWindow) {
+      auto *parent = backChild->ParentWindow;
+      ImGui::FocusWindow(parent);
+      if (backChild->ChildId)
+        ImGui::SetNavID(backChild->ChildId, ImGuiNavLayer_Main, 0,
+                       ImGui::WindowRectAbsToRel(parent, backChild->Rect()));
+    }
+    return false;
+  }
   return true;
 }
+
 namespace {
 std::atomic<float> hudBackgroundAlpha{.8F};
-}
+std::atomic_bool playstationIcons{false};
+} // namespace
+void SetGamepadIcons(bool playstation) { playstationIcons.store(playstation); }
 void SetHUDBackgroundOpacity(float value) {
   if (std::isfinite(value))
     hudBackgroundAlpha.store(std::clamp(value, 0.F, 1.F));
@@ -297,7 +331,12 @@ ImTextureID KeyTexture(std::string_view icon, ImGui::ImVec2 &dimensions) {
   static const auto keys =
       Root().parent_path().parent_path() / "Interface/ImGuiIcons/Icons";
   std::string file(icon);
-  if (file.starts_with("Key"))
+  if (file.starts_with("Pad")) {
+    file.erase(0, 3);
+    if (file != "Up" && file != "Down" && file != "Left" && file != "Right") {
+      file = std::string(playstationIcons.load() ? "PS3_" : "360_") + file;
+    }
+  } else if (file.starts_with("Key"))
     file.erase(0, 3);
   else if (file.starts_with("Digit"))
     file.erase(0, 5);
@@ -372,7 +411,9 @@ void Key(std::string_view icon, std::string_view label) {
         {1, 1}, color);
   } else {
     std::string key(icon);
-    if (key.starts_with("Key"))
+    if (key.starts_with("Pad"))
+      key.erase(0, 3);
+    else if (key.starts_with("Key"))
       key.erase(0, 3);
     else if (key.starts_with("Digit"))
       key.erase(0, 5);

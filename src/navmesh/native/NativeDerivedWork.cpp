@@ -6,9 +6,9 @@
 namespace SkyBuild::Navmesh {
 bool NativeDerivedWork::QueuesIdle() noexcept {
   try {
-    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
+    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
     const RE::BSReadLockGuard guard(*publication.get());
-    const REL::Relocation<void **> manager{REL::ID(400442)};
+    const REL::Relocation<void **> manager{REL::RelocationID(514282, 400442)};
     const auto *bytes = static_cast<const std::byte *>(*manager.get());
     if (!bytes)
       return false;
@@ -32,7 +32,7 @@ NativeDerivedWork::NativeDerivedWork() {
   if (census.preparedTasks || census.retainedCollections.at(0x1D8) ||
       census.retainedCollections.at(0x1F0))
     throw std::runtime_error("Native geometry tasks have not completed");
-  const REL::Relocation<void **> manager{REL::ID(400442)};
+  const REL::Relocation<void **> manager{REL::RelocationID(514282, 400442)};
   auto *bytes = static_cast<std::byte *>(*manager.get());
   edges = reinterpret_cast<RE::BSTArray<Edge> *>(bytes + 0x210);
   triangles = reinterpret_cast<RE::BSTArray<Triangle> *>(bytes + 0x228);

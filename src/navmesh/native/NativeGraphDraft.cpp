@@ -95,7 +95,7 @@ NativeGraphDraft::Create(const PartitionedMesh &graph,
   std::map<std::uint32_t, RetainedLinks> links;
   timing.Mark("audit and graph budgets");
   {
-    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
+    const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
     const RE::BSWriteLockGuard guard(*publication.get());
     for (const auto &[id, mesh] : graph.meshes) {
       if (mesh.nativeDependencies ||
@@ -207,7 +207,7 @@ NativeGraphDraft::Create(const PartitionedMesh &graph,
       native.closedDoors[static_cast<std::uint32_t>(index)].triangleIndex =
           expected.closedDoorTriangles[index];
     using BuildCover = void (*)(RE::BSNavmesh *);
-    const REL::Relocation<BuildCover> buildCover{REL::ID(91071)};
+    const REL::Relocation<BuildCover> buildCover{REL::RelocationID(88641, 91071)};
     {
       const auto scope = timing.Measure("native BuildCover 91071", id);
       buildCover(&native);
@@ -349,7 +349,7 @@ void NativeGraphDraft::MaterializeCuts() {
   using Operation =
       bool (*)(RE::BSNavmesh *, const RE::NiPointer<RE::NiRefObject> &,
                NativeCutEffects &);
-  const REL::Relocation<Operation> apply{REL::ID(91150)};
+  const REL::Relocation<Operation> apply{REL::RelocationID(88706, 91150)};
   auto resolver = std::make_unique<NativeInfoResolver>(infos);
   const auto captureDomains = [&] {
     std::map<const RE::BSNavmesh *, std::uint32_t> result;
@@ -492,7 +492,7 @@ void NativeGraphDraft::MaterializeCuts() {
     using Results = RE::BSScrapArray<RE::BSTSmartPointer<RE::NavMesh>>;
     using Discover =
         bool (*)(const RE::NiPointer<RE::NiRefObject> &, Results *);
-    const REL::Relocation<Discover> discover{REL::ID(30578)};
+    const REL::Relocation<Discover> discover{REL::RelocationID(29755, 30578)};
     for (const auto &source : census.inputs) {
       auto &observation =
           diagnostics

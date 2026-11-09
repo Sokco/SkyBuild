@@ -16,13 +16,14 @@ std::atomic_bool available{};
 bool HoldsNavigationLocks() {
   const auto thread = GetCurrentThreadId();
   bool held = false;
-  for (const auto id : {402045ULL, 402042ULL}) {
-    const REL::Relocation<std::uintptr_t> lock{REL::ID(id)};
+  for (const auto id : {REL::RelocationID(515948, 402045),
+                        REL::RelocationID(515945, 402042)}) {
+    const REL::Relocation<std::uintptr_t> lock{id};
     const auto owner =
         reinterpret_cast<const volatile std::uint32_t *>(lock.address());
     held |= owner[0] == thread && owner[1] != 0;
   }
-  const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::ID(402040)};
+  const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::RelocationID(515943, 402040)};
   if (const auto map = static_cast<RE::NavMeshInfoMap *>(*global.get())) {
     const auto owner =
         reinterpret_cast<const volatile std::uint32_t *>(&map->mapLock);
@@ -60,7 +61,7 @@ bool Initialize() {
   const auto status = MH_Initialize();
   if (status != MH_OK && status != MH_ERROR_ALREADY_INITIALIZED)
     return false;
-  const REL::Relocation<std::uintptr_t> target{REL::ID(19130)};
+  const REL::Relocation<std::uintptr_t> target{REL::RelocationID(18655, 19130)};
   auto *address = reinterpret_cast<void *>(target.address());
   if (MH_CreateHook(address, reinterpret_cast<void *>(&ObserveDetach),
                     reinterpret_cast<void **>(&detach)) != MH_OK)

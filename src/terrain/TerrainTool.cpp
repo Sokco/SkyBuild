@@ -39,14 +39,11 @@ void PublishLoadRecovery(RE::FormID id, const Volume &volume) {
   loadRecovery.store(WithRecoveryCell(loadRecovery.load(), id,
                                       world ? world->GetFormID() : 0, volume));
 }
-template <std::uint64_t Target>
 __declspec(noinline) bool
 RecoveryHeightQuery(void *owner, const RE::NiPoint3 &position, float &height) {
-  // Lower-level callers may supply XY only; do not read a nonexistent Z.
-  const RE::NiPoint3 input{position.x, position.y,
-                           Target == 13344 ? position.z : 0.F};
+  const RE::NiPoint3 input = position;
   using Query = bool (*)(void *, const RE::NiPoint3 &, float &);
-  static const REL::Relocation<Query> original{REL::ID(Target)};
+  static const REL::Relocation<Query> original{REL::RelocationID(13198, 13344)};
   bool result = original(owner, position, height);
   {
     const auto snapshot = loadRecovery.load();
@@ -73,27 +70,28 @@ RecoveryHeightQuery(void *owner, const RE::NiPoint3 &position, float &height) {
 }
 void InstallLoadRecoveryHook() {
   const auto version = REL::Module::get().version();
-  // The caller changed size in 1.7.104. Both sites pass XYZ and a float output
-  // to TES::GetLandHeight, then compare that height with the recovery position.
+  // Each site passes XYZ to TES::GetLandHeight before correcting player height.
   std::uintptr_t offset{};
-  if (version == REL::Version(1, 6, 1170, 0))
+  if (version == REL::Version(1, 5, 97, 0))
+    offset = 0xB39;
+  else if (version == REL::Version(1, 6, 1170, 0))
     offset = 0xCD9;
   else if (version == REL::Version(1, 7, 104, 0))
     offset = 0xCEA;
   else
     return;
-  const auto site = REL::ID(37507).address() + offset;
+  const auto site = REL::RelocationID(36507, 37507).address() + offset;
   std::int32_t displacement{};
   std::memcpy(&displacement, reinterpret_cast<void *>(site + 1),
               sizeof(displacement));
   if (*reinterpret_cast<const std::uint8_t *>(site) != 0xE8 ||
-      site + 5 + displacement != REL::ID(13344).address()) {
+      site + 5 + displacement != REL::RelocationID(13198, 13344).address()) {
     spdlog::warn(
-        "Terrain load recovery skipped modified call site (37507+0x{:X}).",
+        "Terrain load recovery skipped modified call site (+0x{:X}).",
         offset);
     return;
   }
-  SKSE::GetTrampoline().write_call<5>(site, RecoveryHeightQuery<13344>);
+  SKSE::GetTrampoline().write_call<5>(site, RecoveryHeightQuery);
   spdlog::info("Installed edited-terrain below-ground recovery query hook.");
 }
 std::atomic_bool ready{}, converted{}, busy{}, collisionBusy{};
@@ -1255,8 +1253,8 @@ bool HandleButton(RE::ButtonEvent *button) {
     return false;
   const auto device = button->GetDevice();
   const auto key = button->GetIDCode();
-  const auto matches = [&](const ControlBindings::KeyboardBinding &binding) {
-    return device == binding.device && key == binding.code;
+  const auto matches = [&](const ControlBindings::Binding &binding) {
+    return ControlBindings::Matches(*button, binding);
   };
   if (!Ready())
     return false;

@@ -174,8 +174,8 @@ void Adjust(ID3D11DeviceContext *context, ID3D11Resource *resource,
     instances.bounds.resize((count + BufferShadow::BlockRecords - 1) /
                             BufferShadow::BlockRecords);
   }
-  static const REL::Relocation<float (*)(std::uint16_t)> decode{REL::ID(76218)};
-  static const REL::Relocation<std::uint16_t (*)(float)> encode{REL::ID(76217)};
+  static const REL::Relocation<float (*)(std::uint16_t)> decode{REL::RelocationID(50149, 76218)};
+  static const REL::Relocation<std::uint16_t (*)(float)> encode{REL::RelocationID(18405, 76217)};
   std::size_t first = count, last{};
   const auto flush = [&] {
     if (first == count)
@@ -287,8 +287,8 @@ void AdjustPacked(ID3D11DeviceContext *context, ID3D11Resource *resource,
   const auto count = instances.bytes.valid.size();
   instances.roots.resize(count);
   instances.bounds.resize(groups.bytes.valid.size());
-  static const REL::Relocation<float (*)(std::uint16_t)> decode{REL::ID(76218)};
-  static const REL::Relocation<std::uint16_t (*)(float)> encode{REL::ID(76217)};
+  static const REL::Relocation<float (*)(std::uint16_t)> decode{REL::RelocationID(50149, 76218)};
+  static const REL::Relocation<std::uint16_t (*)(float)> encode{REL::RelocationID(18405, 76217)};
   const bool newGroups = instances.originsIdentity != groups.identity;
   const bool revisionChanged =
       instances.revision != terrain.revision || newGroups;

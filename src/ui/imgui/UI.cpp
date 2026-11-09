@@ -31,24 +31,24 @@ struct Card {
 };
 struct State {
   bool visible{}, building{}, moving{}, snapping{true}, wheel{}, terrain{},
-      mainWheel{}, quickWheel{true};
+      mainWheel{}, quickWheel{true}, gamepadWheel{};
   Terrain::Tool terrainTool{Terrain::Tool::Sculpt};
   std::shared_ptr<const std::vector<BuildCosts::Requirement>> requirements;
   bool canUndo{}, canRedo{}, canPlace{}, canItems{}, canCategories{},
       canPacks{}, canBrush{};
-  std::string menuKey{"KeyB"};
+  std::string menuKey;
   std::string counterclockwiseKey;
-  std::string secondaryKey{"MouseRight"};
-  std::array<std::string, 2> modifyKeys{"KeyC", "KeyE"};
+  std::string secondaryKey;
+  std::array<std::string, 2> modifyKeys{};
   bool canCopy{}, canProperties{}, canRemove{};
   bool connecting{}, connectionTarget{};
-  std::array<std::string, 2> brushKeys{"MouseWheelUp", "MouseWheelDown"};
+  std::array<std::string, 2> brushKeys{};
   float brushRadius{96};
   Tool tool{Tool::kIdle};
   RE::FormID selected{};
   std::string pack;
   std::array<std::string, 11> keys;
-  std::array<std::string, 2> terrainKeys{"KeyZ", "KeyX"};
+  std::array<std::string, 2> terrainKeys{};
   float opacity{1}, iconOpacity{.5F}, brightness{1}, wheelX{}, wheelY{};
   int sector{-1};
 };
@@ -116,7 +116,7 @@ void Wheel(const State &s, ImGui::ImVec2 screen) {
   const ImVec2 center{screen.x * .5F, screen.y * .5F};
   auto *draw = GetForegroundDrawList();
   int sector = s.sector;
-  if (!s.quickWheel) {
+  if (!s.quickWheel && !s.gamepadWheel) {
     const auto mouse = GetIO().MousePos;
     const float x = mouse.x - center.x, y = mouse.y - center.y;
     const float distance = std::hypot(x, y);
@@ -215,7 +215,8 @@ void Wheel(const State &s, ImGui::ImVec2 screen) {
       draw, {center.x - extent.x * .5F, center.y - extent.y * .5F}, 0xFFFFFFFF,
       label);
   const char *hint = s.quickWheel ? "Move to select - release to choose"
-                                  : "Click a choice - Esc to close";
+                    : s.gamepadWheel ? "A / Cross to select - B / Circle to close"
+                                     : "Click a choice - Esc to close";
   const auto hintSize = CalcTextSize(hint);
   ImDrawListManager::AddText(
       draw, {center.x - hintSize.x * .5F, center.y + 256}, 0xFFD3D8D9, hint);
@@ -284,6 +285,27 @@ void __stdcall Draw() {
         controlsWidth, Widgets::KeyWidth(first) + Widgets::KeyWidth(second) +
                            14.F + CalcTextSize(label).x + 36.F);
   };
+  const auto fitControl = [&](std::string_view key, const char *label) {
+    controlsWidth = std::max(controlsWidth, Widgets::KeyWidth(key) +
+                                                CalcTextSize(label).x + 46.F);
+  };
+  fitControl(s.keys[8], "Tool Menu");
+  fitControl(s.menuKey, "Main Menu");
+  if (toolActive) {
+    fitControl(s.terrainKeys[0], s.terrain ? "Undo stroke" : "Undo");
+    fitControl(s.terrainKeys[1], s.terrain ? "Redo stroke" : "Redo");
+  }
+  if (!s.terrain && adjusting) {
+    fitControl(s.keys[6], "Rotate Clockwise");
+    if (!s.counterclockwiseKey.empty())
+      fitControl(s.counterclockwiseKey, "Rotate Counterclockwise");
+    fitControl(s.keys[10], "Fine Adjustments");
+    fitControl(s.keys[9], "Snapping: Off");
+  }
+  if (s.tool == Tool::kModify) {
+    fitControl(s.modifyKeys[0], "Copy piece");
+    fitControl(s.modifyKeys[1], "Edit properties");
+  }
   if (toolActive && s.terrain) {
     const auto brushLabel = std::format("Brush size: {:.0f}", s.brushRadius);
     fitPair(s.brushKeys[0], s.brushKeys[1], brushLabel.c_str());
@@ -756,20 +778,20 @@ void SetVisible(bool value) {
 }
 void RefreshControlBindings() {
   using namespace ControlBindings;
-  const std::array<const KeyboardBinding *, 11> keys{
+  const std::array<const Binding *, 11> keys{
       &scrollLeft,   &scrollRight,    &categoryLeft,   &categoryRight,
       &packPrevious, &packNext,       &rotate,         &placeAction,
       &switchMode,   &toggleSnapping, &fineAdjustments};
   std::scoped_lock lock(stateMutex);
   for (std::size_t i = 0; i < keys.size(); ++i)
-    state.keys[i] = keys[i]->iconKey;
-  state.terrainKeys = {historyUndo.iconKey, historyRedo.iconKey};
-  state.menuKey = openMenu.iconKey;
-  state.counterclockwiseKey = rotateCounterclockwise.iconKey;
-  state.secondaryKey = secondaryAction.iconKey;
+    state.keys[i] = keys[i]->Icon();
+  state.terrainKeys = {historyUndo.Icon(), historyRedo.Icon()};
+  state.menuKey = openMenu.Icon();
+  state.counterclockwiseKey = rotateCounterclockwise.Icon();
+  state.secondaryKey = secondaryAction.Icon();
   for (std::size_t i = 0; i < modifyControls.size(); ++i)
-    state.modifyKeys[i] = modifyControls[i].iconKey;
-  state.brushKeys = {brushIncrease.iconKey, brushDecrease.iconKey};
+    state.modifyKeys[i] = modifyControls[i].Icon();
+  state.brushKeys = {brushIncrease.Icon(), brushDecrease.Icon()};
 }
 void SetOpacity(float value) {
   std::scoped_lock lock(stateMutex);
@@ -802,7 +824,7 @@ bool IsToolWheelOpen() {
 }
 bool WheelHasCursor() {
   std::scoped_lock lock(stateMutex);
-  return state.wheel && !state.quickWheel;
+  return state.wheel && !state.quickWheel && !state.gamepadWheel;
 }
 void OpenMainMenu() {
   if (!BuildingMode::IsHammerReady() || IsGameMenuBlocking())
@@ -814,6 +836,7 @@ void OpenMainMenu() {
   }
   state.wheel = true;
   state.mainWheel = true;
+  state.gamepadWheel = ControlBindings::gamepadInUse.load();
   state.quickWheel = Settings::QuickSelectMainMenu();
   state.wheelX = state.wheelY = 0;
   state.sector = -1;
@@ -831,18 +854,13 @@ void OpenToolWheel() {
   }
   state.wheel = true;
   state.mainWheel = false;
+  state.gamepadWheel = ControlBindings::gamepadInUse.load();
   state.quickWheel = Settings::QuickSelectToolMenu();
   state.wheelX = state.wheelY = 0;
   state.sector = -1;
 }
-void MoveToolWheel(float x, float y) {
-  if (!std::isfinite(x) || !std::isfinite(y))
-    return;
-  std::scoped_lock lock(stateMutex);
-  if (!state.wheel)
-    return;
-  state.wheelX += x * .65F;
-  state.wheelY += y * .65F;
+namespace {
+void UpdateWheelSector() {
   const float distance = std::hypot(state.wheelX, state.wheelY);
   if (distance < (state.sector < 0 ? 16.F : 10.F)) {
     state.sector = -1;
@@ -868,6 +886,27 @@ void MoveToolWheel(float x, float y) {
       return;
   }
   state.sector = candidate;
+}
+} // namespace
+void MoveToolWheel(float x, float y) {
+  if (!std::isfinite(x) || !std::isfinite(y))
+    return;
+  std::scoped_lock lock(stateMutex);
+  if (!state.wheel || state.gamepadWheel)
+    return;
+  state.wheelX += x * .65F;
+  state.wheelY += y * .65F;
+  UpdateWheelSector();
+}
+void PointToolWheel(float x, float y) {
+  if (!std::isfinite(x) || !std::isfinite(y))
+    return;
+  std::scoped_lock lock(stateMutex);
+  if (!state.wheel || !state.gamepadWheel || std::hypot(x, y) < .25F)
+    return;
+  state.wheelX = x * 90.F;
+  state.wheelY = y * 90.F;
+  UpdateWheelSector();
 }
 void FinishToolWheel(bool clicked) {
   changingTool.store(true);

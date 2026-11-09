@@ -53,8 +53,8 @@ CutReferenceGraph CaptureNativeCutReferences(
     if (!info || !infos.insert(reinterpret_cast<std::uintptr_t>(info)).second)
       throw std::runtime_error("Missing or duplicate cut reference info");
   }
-  const REL::Relocation<std::uintptr_t> undoTable{REL::ID(246891)};
-  const REL::Relocation<std::uintptr_t> dataTable{REL::ID(245920)};
+  const REL::Relocation<std::uintptr_t> undoTable{REL::RelocationID(295732, 246891)};
+  const REL::Relocation<std::uintptr_t> dataTable{REL::RelocationID(294665, 245920)};
   if (retainedInputs.size() > 4096)
     throw std::runtime_error("Retained cut input budget exceeded");
   // Builder-retained inputs remain part of the graph even if no current

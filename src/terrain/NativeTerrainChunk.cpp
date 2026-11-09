@@ -31,7 +31,7 @@ void ApplyTerrainWeldingPolicy(RE::hkpShapeCollection *mesh,
       WeldingPolicy::EffectiveType(mesh, mesh->disableWelding, type), flagA,
       flagB);
 }
-// These factories/constructors were traced in the unpacked 1.6.1170 image.
+// These factories/constructors were traced in the SE and AE runtime images.
 // Use Address Library identities, never offsets into a caller's instructions.
 // 70655: no-argument BSTriShape factory (fully constructs + engine allocates).
 // 79434: no-argument bhkCompressedMeshShape wrapper factory (0x30 bytes).
@@ -40,8 +40,8 @@ void ApplyTerrainWeldingPolicy(RE::hkpShapeCollection *mesh,
 // ctor(this). The latter is the base of bhkCollisionObject; install the
 // concrete vtable as its native CreateClone does immediately after calling that
 // constructor.
-template <class T> T *Factory(std::uint64_t id) {
-  const REL::Relocation<T *(*)()> create{REL::ID(id)};
+template <class T> T *Factory(REL::RelocationID id) {
+  const REL::Relocation<T *(*)()> create{id};
   auto result = create();
   if (!result)
     throw std::bad_alloc();
@@ -72,7 +72,7 @@ AcquireMaterial(const TerrainTextures &textures) {
 }
 
 // Native interfaces traced from bhkMoppBvTreeShape's construction path in
-// Skyrim 1.6.1170. The compiler input is initialized by the game, rather than
+// SE and AE. The compiler input is initialized by the game, rather than
 // redeclaring Havok's private tolerance/optimization fields.
 struct alignas(16) MoppCompilerInput {
   std::array<std::byte, 0x30> storage{};
@@ -107,10 +107,10 @@ AccelerateCollision(const RE::NiPointer<RE::bhkShape> &meshWrapper) {
         collidableCount, mesh->bigTriangles.size()));
   MoppCompilerInput input;
   const REL::Relocation<void (*)(MoppCompilerInput *)> initialize{
-      REL::ID(80780)};
+      REL::RelocationID(78796, 80780)};
   const REL::Relocation<RE::hkpMoppCode *(*)(const RE::hkpShapeContainer *,
                                              const MoppCompilerInput *, void *)>
-      compile{REL::ID(80785)};
+      compile{REL::RelocationID(78801, 80785)};
   initialize(&input);
   // Native defaults disable chunk subdivision. Preserve the original child
   // shape keys: no triangle remapping and no additional chunk code to manage.
@@ -134,7 +134,7 @@ AccelerateCollision(const RE::NiPointer<RE::bhkShape> &meshWrapper) {
   // and manages native child/code ownership. Do not synthesize Havok vtables.
   RE::NiPointer<RE::bhkShape> wrapper;
   const REL::Relocation<void (*)(RE::bhkShape *, const MoppShapeInfo *)> build{
-      REL::ID(79643)};
+      REL::RelocationID(77775, 79643)};
   const MoppShapeInfo info{0, 0, mesh, compiled, 1, 0};
 
   WeldingPolicy::State welding{mesh};
@@ -150,7 +150,7 @@ AccelerateCollision(const RE::NiPointer<RE::bhkShape> &meshWrapper) {
   // info.code. Transfer an extra reference; retain our local owner while
   // validating. Skyrim's specialized tree separately retains the code at +70.
   {
-    wrapper = RE::NiPointer<RE::bhkShape>(Factory<RE::bhkShape>(79636));
+    wrapper = RE::NiPointer<RE::bhkShape>(Factory<RE::bhkShape>(REL::RelocationID(77768, 79636)));
     compiled->AddReference();
     WeldingPolicy::Scope capture(&welding);
     build(wrapper.get(), &info);
@@ -177,7 +177,7 @@ template <class T>
 void AllocateCollisionArray(RE::hkArray<T> &array, std::int32_t count) {
   const REL::Relocation<void (*)(RE::hkMemoryAllocator *, void *, std::int32_t,
                                  std::int32_t)>
-      reserve{REL::ID(57048)};
+      reserve{REL::RelocationID(56641, 57048)};
   AllocateEmptyHavokArray(
       array, count, [&](void *storage, auto capacity, auto stride) {
         reserve(RE::hkContainerHeapAllocator::GetSingleton(), storage, capacity,
@@ -194,7 +194,7 @@ RE::NiPointer<RE::bhkShape> CollisionShape(const Mesh &mesh, Vec origin) {
     throw std::bad_alloc();
   std::memset(memory, 0, 0x130);
   const REL::Relocation<RE::hkpCompressedMeshShape *(*)(void *, int, float)>
-      ctor{REL::ID(80696)};
+      ctor{REL::RelocationID(78718, 80696)};
   const auto shape = ctor(memory, 17, .01F);
   shape->memSizeAndFlags = 0x130; // ctor's hkReferencedObject default is 0xFFFF
   RE::hkRefPtr<RE::hkpCompressedMeshShape> owned(shape);
@@ -233,7 +233,7 @@ RE::NiPointer<RE::bhkShape> CollisionShape(const Mesh &mesh, Vec origin) {
   }
   // The factory returns the native compressed-mesh material wrapper. Its
   // SetReferencedObject installs userData and owns one Havok reference.
-  RE::NiPointer<RE::bhkShape> wrapper(Factory<RE::bhkShape>(79434));
+  RE::NiPointer<RE::bhkShape> wrapper(Factory<RE::bhkShape>(REL::RelocationID(77559, 79434)));
   wrapper->materialID = static_cast<RE::MATERIAL_ID>(3106094762U);
   wrapper->SetReferencedObject(shape);
   return wrapper;
@@ -244,12 +244,13 @@ void InitializeTerrainWeldingPolicy() {
   if (weldingPolicyInstalled)
     return;
   const auto version = REL::Module::get().version();
-  if (version != REL::Version(1, 6, 1170, 0) &&
+  if (version != REL::Version(1, 5, 97, 0) &&
+      version != REL::Version(1, 6, 1170, 0) &&
       version != REL::Version(1, 7, 104, 0)) {
     spdlog::warn("Terrain welding policy is not verified for this runtime.");
     return;
   }
-  const REL::Relocation<std::uintptr_t> target{REL::ID(60310)};
+  const REL::Relocation<std::uintptr_t> target{REL::RelocationID(59626, 60310)};
   // Pinned offline verification covers the ABI and this function entry.
   // Decline instrumentation if another plugin has already replaced it.
   constexpr std::array<std::uint8_t, 7> entry{0x48, 0x8b, 0xc4, 0x48,
@@ -406,7 +407,7 @@ NativeChunk::Create(const Mesh &mesh, Vec origin,
     std::vector<PackedVertex>().swap(d.cpu.vertices);
   }
   {
-    d.geometry = RE::NiPointer<RE::BSTriShape>(Factory<RE::BSTriShape>(70655));
+    d.geometry = RE::NiPointer<RE::BSTriShape>(Factory<RE::BSTriShape>(REL::RelocationID(69284, 70655)));
     d.root = RE::NiPointer<RE::NiNode>(RE::NiNode::Create(1));
     if (!d.root)
       throw std::bad_alloc();
@@ -535,7 +536,7 @@ NativeChunk::CreateCollision(const Mesh &mesh, Vec origin,
     if (!bodyMemory)
       throw std::bad_alloc();
     const REL::Relocation<RE::bhkRigidBody *(*)(RE::bhkRigidBody *)> bodyCtor{
-        REL::ID(78147)};
+        REL::RelocationID(76315, 78147)};
     d.body = RE::NiPointer<RE::bhkRigidBody>(bodyCtor(bodyMemory));
     d.body->SetReferencedObject(native);
   }
@@ -559,7 +560,7 @@ NativeChunk::CreateCollision(const Mesh &mesh, Vec origin,
     if (!collisionMemory)
       throw std::bad_alloc();
     const REL::Relocation<RE::bhkCollisionObject *(*)(RE::bhkCollisionObject *)>
-        collisionCtor{REL::ID(78372)};
+        collisionCtor{REL::RelocationID(76530, 78372)};
     auto collision = collisionCtor(collisionMemory);
     RE::stl::emplace_vtable<RE::bhkCollisionObject>(collision);
     collision->sceneObject = d.root.get();

@@ -7,7 +7,7 @@
 namespace SkyBuild::Navmesh {
 namespace {
 RE::BSNavmeshInfoMap *Registry() {
-  const REL::Relocation<RE::BSNavmeshInfoMap **> registry{REL::ID(402040)};
+  const REL::Relocation<RE::BSNavmeshInfoMap **> registry{REL::RelocationID(515943, 402040)};
   return *registry.get();
 }
 } // namespace
@@ -26,16 +26,16 @@ NativeDraftInfo::~NativeDraftInfo() {
     std::size_t count;
     std::memcpy(&count, allocation, sizeof(count));
     using Destroy = void (*)(void *, std::size_t, std::size_t, std::uintptr_t);
-    const REL::Relocation<Destroy> destroy{REL::ID(109621)};
-    const REL::Relocation<std::uintptr_t> elementDestructor{REL::ID(30371)};
+    const REL::Relocation<Destroy> destroy{REL::RelocationID(102182, 109621)};
+    const REL::Relocation<std::uintptr_t> elementDestructor{REL::RelocationID(529147, 30371)};
     destroy(info->connectedDoorsArray, 8, count, elementDestructor.address());
     using FreeArray = void (*)(void *, std::size_t);
-    const REL::Relocation<FreeArray> freeArray{REL::ID(109625)};
+    const REL::Relocation<FreeArray> freeArray{REL::RelocationID(102185, 109625)};
     freeArray(allocation, count * 8 + 8);
     info->connectedDoorsArray = nullptr;
   }
   using Destruct = void (*)(RE::BSNavmeshInfo *);
-  const REL::Relocation<Destruct> destruct{REL::ID(30360)};
+  const REL::Relocation<Destruct> destruct{REL::RelocationID(29511, 30360)};
   destruct(info);
   RE::free(info);
 }
@@ -61,11 +61,11 @@ std::unique_ptr<NativeDraftInfo> NativeDraftInfo::Create(RE::NavMesh &form,
     return nullptr;
   }
   using Construct = RE::BSNavmeshInfo *(*)(RE::BSNavmeshInfo *);
-  const REL::Relocation<Construct> construct{REL::ID(30359)};
+  const REL::Relocation<Construct> construct{REL::RelocationID(29510, 30359)};
   draft->info = construct(storage);
   using Populate = void (*)(RE::BSNavmeshInfo *, RE::NavMesh *);
-  const REL::Relocation<Populate> populate{REL::ID(30362)};
-  const REL::Relocation<Populate> bind{REL::ID(30363)};
+  const REL::Relocation<Populate> populate{REL::RelocationID(29513, 30362)};
+  const REL::Relocation<Populate> bind{REL::RelocationID(29514, 30363)};
   populate(draft->info, &form);
   bind(draft->info, &form);
   form.unk110 = draft->info;
@@ -87,7 +87,7 @@ bool NativeDraftInfo::Refresh(RE::NavMesh &form, std::string &error) {
     return false;
   }
   using Populate = void (*)(RE::BSNavmeshInfo *, RE::NavMesh *);
-  const REL::Relocation<Populate> populate{REL::ID(30362)};
+  const REL::Relocation<Populate> populate{REL::RelocationID(29513, 30362)};
   populate(info, &form);
   error = ValidationError(form);
   return error.empty();
@@ -139,7 +139,7 @@ std::string NativeDraftInfo::ValidationError(const RE::NavMesh &form,
   using ResolveCell =
       RE::TESObjectCELL *(*)(RE::Pathing *,
                              const RE::BSTSmartPointer<RE::BSPathingCell> &);
-  const REL::Relocation<ResolveCell> resolve{REL::ID(30686)};
+  const REL::Relocation<ResolveCell> resolve{REL::RelocationID(29870, 30686)};
   const auto manager = RE::Pathing::GetSingleton();
   if (!manager)
     return "Missing native pathing manager";
@@ -247,7 +247,7 @@ void NativeDraftInfo::PopulateConnected(RE::NavMesh &form) {
       info->navMesh != static_cast<RE::BSNavmesh *>(&form))
     throw std::runtime_error("Detached info binding changed before population");
   using Populate = void (*)(RE::BSNavmeshInfo *, RE::NavMesh *);
-  const REL::Relocation<Populate> populate{REL::ID(30362)};
+  const REL::Relocation<Populate> populate{REL::RelocationID(29513, 30362)};
   populate(info, &form);
   bounds.reset();
   connected = true;

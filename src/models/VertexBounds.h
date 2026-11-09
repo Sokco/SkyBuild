@@ -1,23 +1,23 @@
 #pragma once
 #include "models/ModelAsset.h"
+#include "models/ModelData.h"
 #include "ui/thumbnails/ThumbnailRenderer.h"
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <unordered_map>
 
 namespace SkyBuild::Models {
-using VertexBounds = UI::ThumbnailRenderer::Bounds;
 // Game-thread cache: one CPU-only read per model, never a GPU readback.
-inline std::optional<VertexBounds> GetVertexBounds(RE::TESBoundObject *object,
+inline std::optional<Bounds> GetVertexBounds(RE::TESBoundObject *object,
                                                    bool refresh = false) {
   const auto model = WorldModel(object);
   if (!model || !model->GetModel() || !*model->GetModel())
     return {};
-  static std::unordered_map<std::string, std::optional<VertexBounds>> cache;
+  static std::unordered_map<std::string, std::optional<Bounds>> cache;
   const std::string path = model->GetModel();
   if (const auto found = cache.find(path); !refresh && found != cache.end())
     return found->second;
-  std::optional<VertexBounds> result;
+  std::optional<Bounds> result;
   try {
     result = UI::ThumbnailRenderer::ReadBounds(path, [](std::string resource) {
       std::replace(resource.begin(), resource.end(), '/', '\\');
@@ -40,11 +40,11 @@ inline std::optional<VertexBounds> GetVertexBounds(RE::TESBoundObject *object,
     cache.insert_or_assign(path, result);
   return result;
 }
-inline std::optional<VertexBounds>
+inline std::optional<Bounds>
 DecodeVertexBounds(const nlohmann::json &item) {
   try {
     const auto &value = item.at("selectionBounds");
-    VertexBounds result{value.at("min").get<std::array<float, 3>>(),
+    Bounds result{value.at("min").get<std::array<float, 3>>(),
                         value.at("max").get<std::array<float, 3>>()};
     for (int i = 0; i < 3; ++i)
       if (!std::isfinite(result.min[i]) || !std::isfinite(result.max[i]) ||

@@ -112,7 +112,7 @@ add_library(SkyBuildImGui STATIC
     extern/ImAnim/im_anim.cpp)
 target_include_directories(SkyBuildImGui PUBLIC extern/imgui extern/imgui/backends extern/ImAnim)
 target_compile_features(SkyBuildImGui PRIVATE cxx_std_20)
-target_compile_definitions(SkyBuildImGui PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN SKYBUILD_RELATIVE_MOUSE)
+target_compile_definitions(SkyBuildImGui PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN SKYBUILD_RELATIVE_MOUSE IMGUI_IMPL_WIN32_DISABLE_GAMEPAD)
 target_link_libraries(SkyBuildImGui PUBLIC d3d11 dxgi d3dcompiler dwmapi)
 
 # Defines add_commonlibsse_plugin().
@@ -128,7 +128,7 @@ add_commonlibsse_plugin(
     ${PROJECT_NAME}
     NAME "${PLUGIN_NAME}"
     VERSION "${PROJECT_VERSION}"
-    MINIMUM_SKSE_VERSION "2.2.6"
+    MINIMUM_SKSE_VERSION "2.0.20"
     SOURCES
         ${headers}
         ${sources}

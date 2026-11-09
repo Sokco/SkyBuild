@@ -112,11 +112,11 @@ struct Lock {
   ~Lock() { value.Unlock(); }
 };
 float Decode(std::uint16_t value) {
-  static const REL::Relocation<float (*)(std::uint16_t)> fn{REL::ID(76218)};
+  static const REL::Relocation<float (*)(std::uint16_t)> fn{REL::RelocationID(50149, 76218)};
   return fn(value);
 }
 std::uint16_t Encode(float value) {
-  static const REL::Relocation<std::uint16_t (*)(float)> fn{REL::ID(76217)};
+  static const REL::Relocation<std::uint16_t (*)(float)> fn{REL::RelocationID(18405, 76217)};
   return fn(value);
 }
 Buffer *Create(void *self, std::uint32_t size, const void *data,
@@ -305,29 +305,34 @@ void Initialize() {
   if (installed)
     return;
   const auto version = REL::Module::get().version();
-  // Upload bodies, call offsets, globals and allocator slots audited on both.
-  if (version != REL::Version(1, 6, 1170, 0) &&
+  // Upload call offsets differ between SE and AE; allocator slots are shared.
+  if (version != REL::Version(1, 5, 97, 0) &&
+      version != REL::Version(1, 6, 1170, 0) &&
       version != REL::Version(1, 7, 104, 0)) {
     spdlog::warn("Terrain grass buffers are not verified for this runtime.");
     return;
   }
-  const auto add = REL::ID(76323).address();
+  const auto add = REL::RelocationID(74595, 76323).address();
+  const auto allocatorOffset = REL::Relocate(0x228, 0x218);
+  const auto lockOffset = REL::Relocate(0x24E, 0x23E);
   const std::array<std::uint8_t, 3> load{0x48, 0x8B, 0x0D},
       address{0x48, 0x8D, 0x05};
-  if (std::memcmp(reinterpret_cast<const void *>(add + 0x218), load.data(),
+  if (std::memcmp(reinterpret_cast<const void *>(add + allocatorOffset), load.data(),
                   3) ||
-      std::memcmp(reinterpret_cast<const void *>(add + 0x23E), address.data(),
+      std::memcmp(reinterpret_cast<const void *>(add + lockOffset), address.data(),
                   3)) {
     spdlog::error(
         "Terrain grass: native instance instructions differ; hooks disabled.");
     return;
   }
   // RIP-relative globals read by the audited native AddGroup implementation.
-  allocator = reinterpret_cast<void **>(Rip(add + 0x218));
-  groupLock = reinterpret_cast<RE::BSNonReentrantSpinLock *>(Rip(add + 0x23E));
-  grassUploads = {add + 0x236, REL::ID(76326).address() + 0x22D,
-                  REL::ID(76338).address() + 0x98,
-                  REL::ID(76339).address() + 0xED};
+  allocator = reinterpret_cast<void **>(Rip(add + allocatorOffset));
+  groupLock = reinterpret_cast<RE::BSNonReentrantSpinLock *>(Rip(add + lockOffset));
+  grassUploads = {add + REL::Relocate(0x246, 0x236),
+                  REL::RelocationID(74598, 76326).address() +
+                      REL::Relocate(0x23C, 0x22D),
+                  REL::RelocationID(74606, 76338).address() + 0x98,
+                  REL::RelocationID(74607, 76339).address() + 0xED};
   const auto vtable = reinterpret_cast<void **>(
       RE::VTABLE_BSShaderResourceManager[0].address());
   auto create = vtable[0x1E], release = vtable[0x1F];

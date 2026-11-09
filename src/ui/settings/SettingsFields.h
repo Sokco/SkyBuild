@@ -2,6 +2,7 @@
 #include "ui/imgui/Widgets.h"
 #include "ui/settings/SettingsValues.h"
 #include <format>
+#include <imgui_internal.h>
 
 // Rendering-only settings fields, shared by the game and offline UI previews.
 namespace SkyBuild::Settings::Fields {
@@ -11,57 +12,88 @@ inline constexpr std::array<const char *, 11> actions{
     "Tool Menu",     "Toggle snapping", "Fine adjustments"};
 inline constexpr std::array<const char *, 14> fineActions{
     "Move left",      "Move right",    "Move forward", "Move backward",
-    "Move up",        "Move down",     "Turn left",    "Turn right",
-    "Tilt forward",   "Tilt backward", "Roll left",    "Roll right",
+    "Move up",        "Move down",     "Rotate left",  "Rotate right",
+    "Pitch forward",  "Pitch backward", "Roll left", "Roll right",
     "Decrease scale", "Increase scale"};
-inline constexpr int HistoryBindingOffset =
-    static_cast<int>(actions.size() + fineActions.size());
-inline constexpr int MenuBindingAction = HistoryBindingOffset + 2;
-inline constexpr int BrushBindingOffset = MenuBindingAction + 1;
-inline constexpr int ModifyBindingOffset = BrushBindingOffset + 2;
-inline constexpr int SecondaryBindingAction = ModifyBindingOffset + 2;
-inline constexpr int CounterclockwiseBindingAction = SecondaryBindingAction + 1;
-template <class LabelFor, class Capture>
-inline void Keybinds(const Values &values, LabelFor labelFor, Capture capture) {
+using Settings::HistoryBindingOffset;
+using Settings::MenuBindingAction;
+using Settings::BrushBindingOffset;
+using Settings::ModifyBindingOffset;
+using Settings::SecondaryBindingAction;
+using Settings::CounterclockwiseBindingAction;
+using Settings::BindingAt;
+
+template <class LabelFor, class Capture, class IconFor>
+inline void Keybinds(const Values &values, LabelFor labelFor, Capture capture,
+                     IconFor iconFor) {
+  const auto clearOwner = ImGui::GetID("ClearBinding");
+  const bool clearPressed = ImGui::IsKeyPressed(
+      ImGuiKey_GamepadFaceLeft, ImGuiInputFlags_None, clearOwner);
   struct Row {
     const char *label;
     std::uint32_t key;
     int action;
   };
+  std::pair<int, bool> hoveredBinding{-1, false}, focusedBinding{-1, false};
   const auto drawBindings = [&](const char *table, const auto &rows) {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 2});
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {12, 3});
     if (ImGui::BeginTable(
-            table, 2,
+            table, 3,
             ImGui::ImGuiTableFlags_SizingStretchSame |
                 ImGui::ImGuiTableFlags_PadOuterX |
                 ImGui::ImGuiTableFlags_RowBg |
                 ImGui::ImGuiTableFlags_BordersInnerH |
                 ImGui::ImGuiTableFlags_NoSavedSettings,
-            {std::min(560.F, ImGui::GetContentRegionAvail().x), 0})) {
+            {std::min(900.F, ImGui::GetContentRegionAvail().x), 0})) {
       ImGui::TableSetupColumn("Control",
                               ImGui::ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableSetupColumn("Binding",
+      ImGui::TableSetupColumn("Mouse & Keyboard",
                               ImGui::ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Gamepad",
+                              ImGui::ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableHeadersRow();
       for (const auto &row : rows) {
         ImGui::TableNextRow(0, UI::Widgets::TableRowHeight);
         ImGui::TableSetColumnIndex(0);
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted(row.label);
-        ImGui::TableSetColumnIndex(1);
-        const auto label = std::format("{}###SkyBuildBinding{}",
-                                       labelFor(row.key), row.action);
-        const bool clearable =
-            row.action == CounterclockwiseBindingAction && row.key != 0;
-        const float width =
-            ImGui::GetContentRegionAvail().x -
-            (clearable ? 60.F + ImGui::GetStyle().ItemSpacing.x : 0.F);
-        if (ImGui::Button(label.c_str(), {width, 0}))
-          capture(row.action);
-        if (clearable) {
-          ImGui::SameLine();
-          if (ImGui::Button("Clear##Counterclockwise", {60.F, 0}))
-            capture(-1);
+        for (int column = 0; column < 2; ++column) {
+          ImGui::TableSetColumnIndex(column + 1);
+          ImGui::PushID(column);
+          const auto key =
+              column == 0 ? row.key : BindingAt(values.gamepad, row.action);
+          const auto label =
+              std::format("{}###SkyBuildBinding{}", labelFor(key), row.action);
+          const float width = ImGui::GetContentRegionAvail().x;
+          const auto icon = iconFor(key);
+          const auto position = ImGui::GetCursorScreenPos();
+          const float height = std::max(30.F, ImGui::GetFrameHeight());
+          const auto buttonLabel =
+              icon.empty() ? label
+                           : std::format("###SkyBuildBinding{}", row.action);
+          if (ImGui::Button(buttonLabel.c_str(), {width, height}) &&
+              !clearPressed)
+            capture(row.action, column == 1);
+          if (ImGui::IsItemHovered()) hoveredBinding = {row.action, column == 1};
+          if (ImGui::IsItemFocused()) focusedBinding = {row.action, column == 1};
+          // X/Square clears this binding instead of toggling title-bar navigation.
+          if (ImGui::IsItemHovered() || ImGui::IsItemFocused())
+            ImGui::SetKeyOwner(ImGuiKey_GamepadFaceLeft, clearOwner,
+                               ImGuiInputFlags_LockUntilRelease);
+          if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+            capture(-2 - row.action, column == 1);
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s\nRight-click or X / Square to clear", labelFor(key).c_str());
+          if (!icon.empty()) {
+            const auto after = ImGui::GetCursorScreenPos();
+            ImGui::SetCursorScreenPos(
+                {position.x + (width - UI::Widgets::KeyWidth(icon)) * .5F,
+                 position.y + (height - 30.F) * .5F});
+            UI::Widgets::Key(icon, {});
+            ImGui::SetCursorScreenPos(after);
+          }
+          ImGui::PopID();
         }
       }
       ImGui::EndTable();
@@ -101,8 +133,10 @@ inline void Keybinds(const Values &values, LabelFor labelFor, Capture capture) {
                {"Edit properties", values.modifyBindings[1],
                 ModifyBindingOffset + 1}}});
       UI::Widgets::Section("Fine adjustments");
-      std::array<Row, 14> fine;
-      for (std::size_t i = 0; i < fine.size(); ++i)
+      std::array<Row, 16> fine;
+      fine[14] = {"Confirm", values.fineCompletionBindings[0], FineCompletionBindingOffset};
+      fine[15] = {"Cancel", values.fineCompletionBindings[1], FineCompletionBindingOffset + 1};
+      for (std::size_t i = 0; i < fineActions.size(); ++i)
         fine[i] = {fineActions[i], values.fineBindings[i],
                    static_cast<int>(actions.size() + i)};
       drawBindings("FineBindings", fine);
@@ -118,6 +152,12 @@ inline void Keybinds(const Values &values, LabelFor labelFor, Capture capture) {
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
+  }
+  if (clearPressed) {
+    const auto target = hoveredBinding.first >= 0 ? hoveredBinding : focusedBinding;
+    if (target.first >= 0) {
+      capture(-2 - target.first, target.second);
+    }
   }
 }
 struct NavigationState {

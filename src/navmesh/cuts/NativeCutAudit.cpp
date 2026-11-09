@@ -19,8 +19,8 @@ void ExecuteObserved(void *task) {
 void Initialize() {
   if (available.load())
     return;
-  const REL::Relocation<std::uintptr_t> table{REL::ID(204262)};
-  const REL::Relocation<std::uintptr_t> method{REL::ID(30612)};
+  const REL::Relocation<std::uintptr_t> table{REL::RelocationID(254794, 204262)};
+  const REL::Relocation<std::uintptr_t> method{REL::RelocationID(29795, 30612)};
   const auto slot = table.address() + 2 * sizeof(std::uintptr_t);
   if (*reinterpret_cast<const std::uintptr_t *>(slot) != method.address()) {
     spdlog::warn("Native cut writer audit unavailable: task execution slot "

@@ -26,9 +26,12 @@ bool ConsumeToolEvent(RE::InputEvent *event);
 UI::InputDelivery delivery;
 void Dispatch(RE::BSTEventSource<RE::InputEvent *> *source,
               RE::InputEvent *const *events) {
+  const bool wasGamepad = ControlBindings::gamepadInUse.load();
   const bool rebinding = Settings::CaptureInput(events);
   FilteredInputBatch<RE::InputEvent> filtered(
       events ? *events : nullptr, [rebinding](RE::InputEvent *event) {
+        if (!rebinding)
+          ControlBindings::ObserveEvent(*event);
         const bool consume = rebinding ||
                              UI::Native::CaptureInputEvent(event) ||
                              ConsumeToolEvent(event);
@@ -36,19 +39,23 @@ void Dispatch(RE::BSTEventSource<RE::InputEvent *> *source,
         if (!button)
           return consume;
         const bool mouse = button->GetDevice() == RE::INPUT_DEVICE::kMouse;
-        if ((!mouse && button->GetDevice() != RE::INPUT_DEVICE::kKeyboard) ||
+        if ((!mouse && button->GetDevice() != RE::INPUT_DEVICE::kKeyboard &&
+             button->GetDevice() != RE::INPUT_DEVICE::kGamepad) ||
             (mouse && (button->GetIDCode() == 8 || button->GetIDCode() == 9)))
           return consume;
-        return delivery.Consume(button->GetIDCode() + (mouse ? 256U : 0U),
+        return delivery.Consume(ControlBindings::InputCode(*button),
                                 button->IsDown(), button->IsUp(), consume);
       });
+  if (wasGamepad != ControlBindings::gamepadInUse.load()) {
+    UI::RefreshControlBindings();
+    UI::FineAdjustments::Update();
+  }
   originalDispatch(source, &filtered.head);
 }
 bool HandleButton(RE::ButtonEvent *button) {
   using namespace ControlBindings;
-  const auto matches = [button](const KeyboardBinding &binding) {
-    return button->GetDevice() == binding.device &&
-           button->GetIDCode() == binding.code;
+  const auto matches = [button](const Binding &binding) {
+    return ControlBindings::Matches(*button, binding);
   };
   if (UI::FineAdjustments::IsOpen())
     return UI::FineAdjustments::HandleButton(button);
@@ -101,6 +108,7 @@ bool HandleButton(RE::ButtonEvent *button) {
       }
       return true;
     }
+    if (!PlacementPreview::IsMovingObject())
     for (std::size_t i = 0; i < modifyControls.size(); ++i)
       if (matches(modifyControls[i])) {
         if (button->IsDown() && !PlacementPreview::IsMovingObject()) {
@@ -145,8 +153,7 @@ bool HandleButton(RE::ButtonEvent *button) {
       UI::FineAdjustments::Open();
     return true;
   }
-  if (matches(rotate) ||
-      (rotateCounterclockwise.code && matches(rotateCounterclockwise))) {
+  if (matches(rotate) || matches(rotateCounterclockwise)) {
     static std::array<KeyRepeat, 2> repeats;
     const bool clockwise = matches(rotate);
     if (repeats[clockwise ? 0 : 1].Pulse(button->IsDown(), button->IsPressed(),

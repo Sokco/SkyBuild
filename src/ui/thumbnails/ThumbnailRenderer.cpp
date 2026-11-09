@@ -49,7 +49,7 @@ std::string ResourcePath(std::string path, std::string_view folder) {
 // Apply authored transforms and form texture swaps for rendering and analysis.
 std::vector<Surface> ReadSurfaces(const Input &input,
                                   const ResourceReader &read,
-                                  MaterialShell::Mesh &materials,
+                                  Models::Mesh &materials,
                                   const std::atomic_bool &cancel,
                                   bool geometryOnly = false) {
   auto bytes = read(ResourcePath(input.model, "meshes/"));
@@ -147,9 +147,8 @@ std::vector<Surface> ReadSurfaces(const Input &input,
           v[index].normal += n;
       }
       if (input.analyze) {
-        MaterialShell::Triangle triangle{};
+        Models::Triangle triangle{};
         triangle.texture = textureId;
-        triangle.mesh = static_cast<unsigned>(i + 1);
         size_t j = 0;
         for (auto index : {tri.p1, tri.p2, tri.p3}) {
           auto p = surface.vertices[index].position;
@@ -392,14 +391,14 @@ struct Pipeline {
   }
 };
 } // namespace
-Bounds ReadBounds(const std::string &model, const ResourceReader &read) {
+Models::Bounds ReadBounds(const std::string &model, const ResourceReader &read) {
   Input input;
   input.model = model;
-  MaterialShell::Mesh unused;
+  Models::Mesh unused;
   std::atomic_bool cancel{};
   const auto surfaces = ReadSurfaces(input, read, unused, cancel);
   const auto infinity = std::numeric_limits<float>::infinity();
-  Bounds bounds{{infinity, infinity, infinity},
+  Models::Bounds bounds{{infinity, infinity, infinity},
                 {-infinity, -infinity, -infinity}};
   for (const auto &surface : surfaces)
     for (const auto &vertex : surface.vertices) {
@@ -414,12 +413,12 @@ Bounds ReadBounds(const std::string &model, const ResourceReader &read) {
     }
   return bounds;
 }
-MaterialShell::Mesh ReadMaterials(const Input &input,
+Models::Mesh ReadMaterials(const Input &input,
                                   const ResourceReader &read,
                                   const std::atomic_bool &cancel) {
   auto analysis = input;
   analysis.analyze = true;
-  MaterialShell::Mesh materials;
+  Models::Mesh materials;
   ReadSurfaces(analysis, read, materials, cancel, true);
   return materials;
 }

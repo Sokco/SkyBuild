@@ -10,6 +10,13 @@ EffectiveMaterials(const std::vector<Material> &materials) {
                          Settings::BuildingCostMultiplier());
 }
 
+// LookupForm<T> requires an exact form type; materials use several bound types.
+inline RE::TESBoundObject *ResolveMaterial(RE::TESDataHandler &handler,
+                                           const Material &material) {
+  auto *form = handler.LookupForm(material.local, material.plugin);
+  return form ? form->As<RE::TESBoundObject>() : nullptr;
+}
+
 struct Source {
   RE::NiPointer<RE::TESObjectREFR> owner;
   RE::TESObjectREFR::InventoryItemMap inventory;
@@ -67,9 +74,7 @@ CheckAvailability(const std::vector<Material> &materials) {
   std::set<RE::TESBoundObject *> items;
   std::vector<RE::TESBoundObject *> resolved;
   for (const auto &material : effective) {
-    auto *item = handler ? handler->LookupForm<RE::TESBoundObject>(
-                               material.local, material.plugin)
-                         : nullptr;
+    auto *item = handler ? ResolveMaterial(*handler, material) : nullptr;
     if (item && (!item->IsInventoryObject() || item->IsDeleted()))
       item = nullptr;
     resolved.push_back(item);
@@ -102,8 +107,7 @@ public:
       return false;
     items.clear();
     for (const auto &material : effective) {
-      auto *item = handler->LookupForm<RE::TESBoundObject>(material.local,
-                                                           material.plugin);
+      auto *item = ResolveMaterial(*handler, material);
       if (!item || !item->IsInventoryObject() || item->IsDeleted()) {
         RE::SendHUDMessage::ShowHUDMessage(
             "SkyBuild: a refund material is unavailable; removal cancelled.");
@@ -152,8 +156,7 @@ public:
     std::vector<Required> required;
     std::set<RE::TESBoundObject *> items;
     for (const auto &material : effective) {
-      auto *item = handler->LookupForm<RE::TESBoundObject>(material.local,
-                                                           material.plugin);
+      auto *item = ResolveMaterial(*handler, material);
       if (!item || !item->IsInventoryObject() || item->IsDeleted()) {
         RE::SendHUDMessage::ShowHUDMessage(
             "SkyBuild: a required material is unavailable.");

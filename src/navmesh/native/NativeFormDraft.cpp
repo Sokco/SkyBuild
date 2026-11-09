@@ -175,7 +175,7 @@ CaptureDoorAnchors(const std::map<std::uint32_t, AuthoredMesh> &originals) {
     const auto right = skyrim_cast<const RE::PathingCell *>(b);
     return left && right && left->pathingCellInfo == right->pathingCellInfo;
   };
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
   const RE::BSReadLockGuard guard(*publication.get());
   for (const auto &[id, original] : originals) {
     if (original.doorTriangles.empty() && original.closedDoorTriangles.empty())
@@ -274,7 +274,7 @@ std::set<RE::FormID> LoadedIDs() {
   const auto pathing = RE::Pathing::GetSingleton();
   if (!pathing)
     throw std::runtime_error("No native pathing instance");
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
   const RE::BSWriteLockGuard guard(*publication.get());
   RE::BSTArray<RE::BSTSmartPointer<RE::BSNavmesh>> loaded;
   if (!pathing->GetAllLoadedNavmeshes5(loaded))
@@ -420,8 +420,8 @@ bool Prepare() {
     RE::BSTSmartPointer<RE::BSPathingCell> parent;
     timing.Mark("capture native parent context");
     {
-      const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
-      const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+      const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
+      const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
       const RE::BSWriteLockGuard publicationGuard(*publication.get());
       const RE::BSReadLockGuard listingGuard(*listing.get());
       if (cell->GetRuntimeData().navMeshes)
@@ -446,7 +446,7 @@ bool Prepare() {
           islandCells.at(componentIndex));
       if (!islandCell || !islandCell->IsAttached())
         throw std::runtime_error("Cached island cell is no longer attached");
-      const REL::Relocation<RE::BSReadWriteLock *> listing{REL::ID(402042)};
+      const REL::Relocation<RE::BSReadWriteLock *> listing{REL::RelocationID(515945, 402042)};
       {
         const RE::BSReadLockGuard guard(*listing.get());
         if (islandCell->GetRuntimeData().navMeshes)

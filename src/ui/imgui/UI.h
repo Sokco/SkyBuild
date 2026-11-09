@@ -15,6 +15,7 @@ void OpenMainMenu();
 bool WheelHasCursor();
 void FinishToolWheel(bool clicked = false);
 void MoveToolWheel(float x, float y);
+void PointToolWheel(float x, float y);
 void CancelToolWheel();
 [[nodiscard]] bool IsToolWheelOpen();
 void RefreshControlBindings();

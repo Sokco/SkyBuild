@@ -157,16 +157,37 @@ bool FullMoveTo(const RE::TESObjectREFRPtr &object,
 
 struct BuildRay {
   Physics::RaycastResults hits{};
+  RE::NiPoint3 origin{}, direction{};
   float maxDistance{0.0F};
 };
 
 BuildRay CastBuildRay() {
   constexpr float RAYCAST_MAX_DISTANCE = 1024.0F;
-  auto hits = Physics::CastCameraRay(RAYCAST_MAX_DISTANCE);
+  const auto *camera = RE::PlayerCamera::GetSingleton();
+  auto *player = RE::PlayerCharacter::GetSingleton();
+  if (!camera || !camera->cameraRoot || !player)
+    return {};
+  BuildRay ray;
+  ray.origin = camera->cameraRoot->world.translate;
+  ray.direction = camera->cameraRoot->world.rotate.GetVectorY();
+  const float length = std::sqrt(ray.direction.Dot(ray.direction));
+  if (length <= .000001F)
+    return {};
+  ray.direction = ray.direction * (1.F / length);
+  if (camera->IsInThirdPerson()) {
+    auto playerCenter = player->GetPosition();
+    playerCenter.z += player->GetHeight() * .5F;
+    // Advance along the crosshair ray to player depth, not sideways to the actor.
+    ray.origin += ray.direction *
+        std::max(0.F, (playerCenter - ray.origin).Dot(ray.direction));
+  }
+  ray.maxDistance = RAYCAST_MAX_DISTANCE;
+  ray.hits = Physics::CastRay(ray.origin, ray.direction, ray.maxDistance);
   if (movingObject)
-    std::erase_if(
-        hits, [](const auto &hit) { return hit.hitReference == movingObject; });
-  return {std::move(hits), RAYCAST_MAX_DISTANCE};
+    std::erase_if(ray.hits, [](const auto &hit) {
+      return hit.hitReference == movingObject;
+    });
+  return ray;
 }
 
 void UpdateStateFromRaycast() {
@@ -250,13 +271,10 @@ void UpdateStateFromRaycast() {
     }
     float hitNormal[4]{};
     _mm_storeu_ps(hitNormal, placedHit->normal.quad);
-    const auto camera = RE::PlayerCamera::GetSingleton();
-    if (!camera || !camera->cameraRoot)
-      return;
     const auto snap = Snapping::SnapToObject(
         hitReference, placedHit->position,
         {hitNormal[0], hitNormal[1], hitNormal[2]}, activePlaceable.type,
-        activePlaceable.grid, camera->cameraRoot->world.translate);
+        activePlaceable.grid, buildRay.origin);
 
     if (snap.didSnap) {
       state.visible = true;
@@ -278,10 +296,11 @@ void UpdateStateFromRaycast() {
   // occupied opening; allow the ray to reach another doorway.
   const float gridRaycastMaxDistance =
       placingDoor && placedHit != physicsHits.end() ? buildRay.maxDistance
-      : closestHit ? GridRaycast::GetRayDistanceTo(closestHit->position)
+      : closestHit ? closestHit->distance
                    : buildRay.maxDistance;
   const auto gridHit = GridRaycast::CastGridRay(
-      gridRaycastMaxDistance, activePlaceable.type, activePlaceable.grid);
+      buildRay.origin, buildRay.direction, gridRaycastMaxDistance,
+      activePlaceable.type, activePlaceable.grid);
   if (gridHit.didSnap) {
     state.visible = true;
     state.validPlacement = true;

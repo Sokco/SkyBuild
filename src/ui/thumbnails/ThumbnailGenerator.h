@@ -1,5 +1,5 @@
 #pragma once
-#include "building/materials/ShellVoxelizer.h"
+#include "models/ModelData.h"
 #include <memory>
 #include <filesystem>
 
@@ -34,7 +34,7 @@ void QueueMaterialAnalysis(RE::FormID form);
 struct MaterialMesh {
   std::uint64_t generation{};
   RE::FormID form{};
-  MaterialShell::Mesh mesh;
+  Models::Mesh mesh;
   std::string error;
 };
 std::shared_ptr<const MaterialMesh> TakeMaterialMesh();

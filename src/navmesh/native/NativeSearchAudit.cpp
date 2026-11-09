@@ -6,22 +6,22 @@
 namespace SkyBuild::Navmesh::NativeSearchAudit {
 namespace {
 struct Binding {
-  std::uint64_t table, method;
+  REL::RelocationID table, method;
 };
 // The initialized 1.6.1170 registry (90396) contains these 31 processors.
 // IDs identify engine objects/functions, never executable byte prefixes.
 constexpr std::array bindings{
-    Binding{246004, 91699}, Binding{214778, 50507}, Binding{204675, 31487},
-    Binding{214496, 50151}, Binding{212970, 48275}, Binding{204673, 31485},
-    Binding{214494, 50149}, Binding{204689, 31503}, Binding{204669, 31478},
-    Binding{214323, 49825}, Binding{204677, 31492}, Binding{214116, 49584},
-    Binding{204683, 31497}, Binding{204700, 31547}, Binding{204446, 31181},
-    Binding{213874, 49299}, Binding{204704, 31555}, Binding{212074, 47074},
-    Binding{212858, 48156}, Binding{213832, 49284}, Binding{213221, 48605},
-    Binding{213182, 48574}, Binding{204685, 31499}, Binding{204693, 31507},
-    Binding{213005, 48290}, Binding{204706, 31559}, Binding{204691, 31505},
-    Binding{204702, 31551}, Binding{204687, 31501}, Binding{204671, 31483},
-    Binding{214069, 49562}};
+    Binding{REL::RelocationID(294890, 246004), REL::RelocationID(89279, 91699)}, Binding{REL::RelocationID(267607, 214778), REL::RelocationID(49457, 50507)}, Binding{REL::RelocationID(255219, 204675), REL::RelocationID(30655, 31487)},
+    Binding{REL::RelocationID(267392, 214496), REL::RelocationID(49265, 50151)}, Binding{REL::RelocationID(266318, 212970), REL::RelocationID(47264, 48275)}, Binding{REL::RelocationID(255218, 204673), REL::RelocationID(30656, 31485)},
+    Binding{REL::RelocationID(267391, 214494), REL::RelocationID(49266, 50149)}, Binding{REL::RelocationID(255259, 204689), REL::RelocationID(30703, 31503)}, Binding{REL::RelocationID(255210, 204669), REL::RelocationID(30646, 31478)},
+    Binding{REL::RelocationID(267185, 214323), REL::RelocationID(48908, 49825)}, Binding{REL::RelocationID(255225, 204677), REL::RelocationID(30663, 31492)}, Binding{REL::RelocationID(267072, 214116), REL::RelocationID(48664, 49584)},
+    Binding{REL::RelocationID(255256, 204683), REL::RelocationID(30699, 31497)}, Binding{REL::RelocationID(255265, 204700), REL::RelocationID(30713, 31547)}, Binding{REL::RelocationID(255091, 204446), REL::RelocationID(30374, 31181)},
+    Binding{REL::RelocationID(266858, 213874), REL::RelocationID(48328, 49299)}, Binding{REL::RelocationID(255273, 204704), REL::RelocationID(30721, 31555)}, Binding{REL::RelocationID(265574, 212074), REL::RelocationID(45837, 47074)},
+    Binding{REL::RelocationID(266189, 212858), REL::RelocationID(47036, 48156)}, Binding{REL::RelocationID(266846, 213832), REL::RelocationID(48329, 49284)}, Binding{REL::RelocationID(266478, 213221), REL::RelocationID(47548, 48605)},
+    Binding{REL::RelocationID(266469, 213182), REL::RelocationID(47547, 48574)}, Binding{REL::RelocationID(255257, 204685), REL::RelocationID(30700, 31499)}, Binding{REL::RelocationID(255261, 204693), REL::RelocationID(30704, 31507)},
+    Binding{REL::RelocationID(266327, 213005), REL::RelocationID(47265, 48290)}, Binding{REL::RelocationID(255277, 204706), REL::RelocationID(30725, 31559)}, Binding{REL::RelocationID(255260, 204691), REL::RelocationID(30702, 31505)},
+    Binding{REL::RelocationID(255269, 204702), REL::RelocationID(30717, 31551)}, Binding{REL::RelocationID(255258, 204687), REL::RelocationID(30701, 31501)}, Binding{REL::RelocationID(255217, 204671), REL::RelocationID(30654, 31483)},
+    Binding{REL::RelocationID(267059, 214069), REL::RelocationID(48663, 49562)}};
 // Native dispatcher 90396 passes processor, request smart-pointer address,
 // solution smart-pointer address and receives a bool. Leave both opaque
 // smart-pointer arguments untouched, including their ownership.
@@ -65,14 +65,14 @@ void Initialize() {
   // implementation is not silently treated as the inspected native ABI.
   std::array<std::uintptr_t, bindings.size()> slots{};
   for (std::size_t i = 0; i < bindings.size(); ++i) {
-    const REL::Relocation<std::uintptr_t> table{REL::ID(bindings[i].table)};
-    const REL::Relocation<std::uintptr_t> method{REL::ID(bindings[i].method)};
+    const REL::Relocation<std::uintptr_t> table{bindings[i].table};
+    const REL::Relocation<std::uintptr_t> method{bindings[i].method};
     slots[i] = table.address() + sizeof(std::uintptr_t);
     if (*reinterpret_cast<const std::uintptr_t *>(slots[i]) !=
         method.address()) {
       spdlog::warn("Navmesh processor audit unavailable: dispatch slot {} was "
                    "replaced. No audit hooks installed.",
-                   bindings[i].table);
+                   bindings[i].table.id());
       return;
     }
     originals[i] = reinterpret_cast<Dispatch>(method.address());

@@ -64,11 +64,11 @@ void Initialize() {
 
   // The plugin-wide minimum runtime is enforced at load. Resolve native
   // functions through Address Library; executable prefixes are not an ABI.
-  const REL::Relocation<std::uintptr_t> get{REL::ID(30584)};
-  const REL::Relocation<std::uintptr_t> request{REL::ID(91401)};
-  const REL::Relocation<std::uintptr_t> ready{REL::ID(91403)};
-  const REL::Relocation<std::uintptr_t> release{REL::ID(91404)};
-  const REL::Relocation<std::uintptr_t> idle{REL::ID(91405)};
+  const REL::Relocation<std::uintptr_t> get{REL::RelocationID(29765, 30584)};
+  const REL::Relocation<std::uintptr_t> request{REL::RelocationID(88946, 91401)};
+  const REL::Relocation<std::uintptr_t> ready{REL::RelocationID(88948, 91403)};
+  const REL::Relocation<std::uintptr_t> release{REL::RelocationID(88949, 91404)};
+  const REL::Relocation<std::uintptr_t> idle{REL::RelocationID(88950, 91405)};
   coordinator = reinterpret_cast<GetCoordinator>(get.address());
   api.request = reinterpret_cast<decltype(api.request)>(request.address());
   api.ready = reinterpret_cast<decltype(api.ready)>(ready.address());
@@ -116,7 +116,7 @@ bool RetireBeforeStreaming() {
   auto calls = api;
   calls.instance = coordinator();
   using Pump = void (*)(void *, void *);
-  const REL::Relocation<Pump> pump{REL::ID(91429)};
+  const REL::Relocation<Pump> pump{REL::RelocationID(88974, 91429)};
   const bool restored = WithStreamingPause(
       calls,
       [&] {

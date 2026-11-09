@@ -7,15 +7,12 @@
 
 namespace SkyBuild::Settings {
 inline constexpr std::uint32_t MenuToggleKey = 48; // B: main wheel.
-struct Values {
-  bool sandboxMode{false};
-  float buildingCostMultiplier{1.F};
+struct Bindings {
   std::uint32_t menuKey{MenuToggleKey};
   std::uint32_t secondaryBinding{257};
-  std::uint32_t counterclockwiseBinding{};             // Zero means unbound.
-  std::array<std::uint32_t, 2> modifyBindings{46, 18}; // Copy, properties.
-  bool quickSelectMainMenu{false}, quickSelectToolMenu{true};
-  float terrainStrengthPerSecond{Terrain::BrushStrengthPerSecond};
+  std::array<std::uint32_t, 2> fineCompletionBindings{256, 257};
+  std::uint32_t counterclockwiseBinding{};              // Zero means unbound.
+  std::array<std::uint32_t, 2> modifyBindings{46, 18};  // Copy, properties.
   std::array<std::uint32_t, 2> historyBindings{44, 45}; // Undo / redo.
   std::array<std::uint32_t, 2> brushBindings{
       264, 265}; // Increase / decrease radius.
@@ -23,6 +20,26 @@ struct Values {
                                          19,  256, 258, 20, 33};
   std::array<std::uint32_t, 14> fineBindings{203, 205, 200, 208, 201, 209, 36,
                                              38,  23,  37,  22,  24,  12,  13};
+};
+inline Bindings GamepadDefaults() {
+  Bindings b;
+  b.menuKey = 271;
+  b.secondaryBinding = 277;
+  b.fineCompletionBindings = {270, 271};
+  b.counterclockwiseBinding = 0;
+  b.modifyBindings = {267, 266};
+  b.historyBindings = {268, 269};
+  b.brushBindings = {275, 274};
+  b.bindings = {274, 275, 280, 281, 266, 267, 279, 276, 278, 272, 273};
+  b.fineBindings = {268, 269, 266, 267, 280, 274, 278, 277, 279, 276, 0, 0, 275, 281};
+  return b;
+}
+struct Values : Bindings {
+  Bindings gamepad{GamepadDefaults()};
+  bool sandboxMode{false};
+  float buildingCostMultiplier{1.F};
+  bool quickSelectMainMenu{false}, quickSelectToolMenu{true};
+  float terrainStrengthPerSecond{Terrain::BrushStrengthPerSecond};
   float uiOpacity{1.0F};
   float hudBackgroundOpacity{0.8F};
   float previewOpacity{0.5F};
@@ -32,85 +49,69 @@ struct Values {
   std::array<float, 3> previewTint{0.0F, 1.0F, 0.0F};
   std::array<float, 3> moveTint{0.1F, 0.45F, 1.0F};
 };
+inline constexpr int HistoryBindingOffset = 25;
+inline constexpr int MenuBindingAction = 27;
+inline constexpr int BrushBindingOffset = 28;
+inline constexpr int ModifyBindingOffset = 30;
+inline constexpr int SecondaryBindingAction = 32;
+inline constexpr int CounterclockwiseBindingAction = 33;
+inline constexpr int FineCompletionBindingOffset = 34;
+inline constexpr int BindingCount = 36;
+template <class T> inline auto &BindingAt(T &bindings, int action) {
+  if (action >= FineCompletionBindingOffset) return bindings.fineCompletionBindings.at(action - FineCompletionBindingOffset);
+  if (action == CounterclockwiseBindingAction) return bindings.counterclockwiseBinding;
+  if (action == SecondaryBindingAction) return bindings.secondaryBinding;
+  if (action >= ModifyBindingOffset) return bindings.modifyBindings.at(action - ModifyBindingOffset);
+  if (action >= BrushBindingOffset) return bindings.brushBindings.at(action - BrushBindingOffset);
+  if (action == MenuBindingAction) return bindings.menuKey;
+  if (action >= HistoryBindingOffset) return bindings.historyBindings.at(action - HistoryBindingOffset);
+  if (action >= 11) return bindings.fineBindings.at(action - 11);
+  return bindings.bindings.at(action);
+}
+enum BindingScope : unsigned {
+  ScopeBuild = 1, ScopeModify = 2, ScopeMove = 4, ScopeFine = 8, ScopeTerrain = 16, ScopePicker = 32, ScopeIdle = 64
+};
+inline unsigned BindingScopes(int action) {
+  constexpr unsigned all = ScopeBuild | ScopeModify | ScopeMove | ScopeFine | ScopeTerrain | ScopePicker | ScopeIdle;
+  if (action >= FineCompletionBindingOffset) return ScopeFine;
+  if (action == MenuBindingAction || action == 8) return all & ~ScopeFine;
+  if (action == 7 || action == SecondaryBindingAction) return all & ~(ScopeIdle | ScopeFine);
+  if (action == HistoryBindingOffset || action == HistoryBindingOffset + 1)
+    return ScopeBuild | ScopeModify | ScopeMove | ScopeTerrain;
+  if (action == BrushBindingOffset || action == BrushBindingOffset + 1) return ScopeTerrain;
+  if (action == ModifyBindingOffset || action == ModifyBindingOffset + 1) return ScopeModify;
+  if (action >= 11 && action < HistoryBindingOffset) return ScopeFine;
+  if (action == 6 || action == 9 || action == 10 || action == CounterclockwiseBindingAction)
+    return ScopeBuild | ScopeMove;
+  return ScopeBuild;
+}
+template <class KnownKey>
+bool ValidateBindings(const Bindings &values, KnownKey known) {
+  for (int i = 0; i < BindingCount; ++i) {
+    const auto code = BindingAt(values, i);
+    if (!code) continue;
+    if (!known(code) || code == 1) return false;
+    if ((code == 264 || code == 265) && i != 0 && i != 1 &&
+        i != BrushBindingOffset && i != BrushBindingOffset + 1) return false;
+    for (int j = 0; j < i; ++j)
+      if (code == BindingAt(values, j) && (BindingScopes(i) & BindingScopes(j)))
+        return false;
+  }
+  return true;
+}
+// A new assignment only displaces controls that can run in the same scope.
+inline void AssignBinding(Bindings &values, int action, std::uint32_t code) {
+  if (code)
+    for (int i = 0; i < BindingCount; ++i)
+      if (i != action && BindingAt(values, i) == code &&
+          (BindingScopes(action) & BindingScopes(i)))
+        BindingAt(values, i) = 0;
+  BindingAt(values, action) = code;
+}
 template <class KnownKey>
 bool ValidateAndNormalize(Values &values, KnownKey known) {
-  if (!known(values.menuKey) || values.menuKey == 1 || values.menuKey == 264 ||
-      values.menuKey == 265)
+  if (!ValidateBindings(values, known))
     return false;
-  if (!known(values.secondaryBinding) || values.secondaryBinding == 1 ||
-      values.secondaryBinding == 264 || values.secondaryBinding == 265 ||
-      values.secondaryBinding == values.menuKey)
-    return false;
-  for (std::size_t i = 0; i < values.bindings.size(); ++i) {
-    if (values.bindings[i] == values.menuKey ||
-        values.bindings[i] == values.secondaryBinding ||
-        values.bindings[i] == 1 || !known(values.bindings[i]))
-      return false;
-    if (i > 1 && (values.bindings[i] == 264 || values.bindings[i] == 265))
-      return false;
-    for (std::size_t j = 0; j < i; ++j)
-      if (values.bindings[i] == values.bindings[j])
-        return false;
-  }
-  for (std::size_t i = 0; i < values.modifyBindings.size(); ++i) {
-    const auto key = values.modifyBindings[i];
-    if (!known(key) || key == 1 || key == 264 || key == 265 ||
-        key == values.menuKey || key == values.secondaryBinding ||
-        key == values.bindings[7] || key == values.bindings[8] ||
-        key == values.bindings[6] || key == values.bindings[9] ||
-        key == values.bindings[10] ||
-        std::ranges::find(values.historyBindings, key) !=
-            values.historyBindings.end())
-      return false;
-    for (std::size_t j = 0; j < i; ++j)
-      if (key == values.modifyBindings[j])
-        return false;
-  }
-  for (std::size_t i = 0; i < values.fineBindings.size(); ++i) {
-    if (values.fineBindings[i] == values.menuKey ||
-        values.fineBindings[i] == 1 ||
-        values.fineBindings[i] == values.bindings[7] ||
-        values.fineBindings[i] == values.secondaryBinding ||
-        !known(values.fineBindings[i]))
-      return false;
-    for (std::size_t j = 0; j < i; ++j)
-      if (values.fineBindings[i] == values.fineBindings[j])
-        return false;
-  }
-  for (std::size_t i = 0; i < values.historyBindings.size(); ++i) {
-    const auto key = values.historyBindings[i];
-    if (key == values.menuKey || !known(key) || key == values.bindings[7] ||
-        key == values.bindings[8] || key == values.secondaryBinding ||
-        key == 1 || key == 264 || key == 265 ||
-        std::find(values.bindings.begin(), values.bindings.end(), key) !=
-            values.bindings.end())
-      return false; // Secondary terrain action.
-    for (std::size_t j = 0; j < i; ++j)
-      if (key == values.historyBindings[j])
-        return false;
-  }
-  for (std::size_t i = 0; i < values.brushBindings.size(); ++i) {
-    const auto key = values.brushBindings[i];
-    if (!known(key) || key == values.menuKey || key == 1 ||
-        key == values.secondaryBinding || key == values.bindings[7] ||
-        key == values.bindings[8] ||
-        std::find(values.historyBindings.begin(), values.historyBindings.end(),
-                  key) != values.historyBindings.end())
-      return false;
-    for (std::size_t j = 0; j < i; ++j)
-      if (key == values.brushBindings[j])
-        return false;
-  }
-  if (const auto key = values.counterclockwiseBinding; key != 0) {
-    if (!known(key) || key == 1 || key == 264 || key == 265 ||
-        key == values.menuKey || key == values.secondaryBinding ||
-        std::ranges::find(values.bindings, key) != values.bindings.end() ||
-        std::ranges::find(values.historyBindings, key) !=
-            values.historyBindings.end() ||
-        std::ranges::find(values.modifyBindings, key) !=
-            values.modifyBindings.end())
-      return false;
-  }
   if (!std::isfinite(values.buildingCostMultiplier))
     return false;
   values.buildingCostMultiplier =

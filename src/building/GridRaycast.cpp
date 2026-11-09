@@ -5,26 +5,6 @@
 #include <vector>
 namespace SkyBuild::GridRaycast {
 namespace {
-RE::NiPoint3 Direction(const RE::PlayerCamera *camera) {
-  auto d = camera->cameraRoot->world.rotate.GetVectorY();
-  const float length = std::sqrt(d.Dot(d));
-  return length > .000001F ? d * (1.0F / length) : RE::NiPoint3{};
-}
-RE::NiPoint3 Origin(const RE::PlayerCamera *camera) {
-  auto target = camera->cameraTarget.get().get();
-  if (!target)
-    target = RE::PlayerCharacter::GetSingleton();
-  if (!target)
-    return camera->cameraRoot->world.translate;
-  RE::NiPoint3 eye{}, direction{};
-  target->GetEyeVector(eye, direction, false);
-  const auto cameraOrigin = camera->cameraRoot->world.translate;
-  const auto forward = Direction(camera);
-  // Clip the camera ray at the player's depth. Starting at the eye itself
-  // makes a parallel, displaced ray that does not pass through the crosshair.
-  return cameraOrigin +
-         forward * std::max(0.F, (eye - cameraOrigin).Dot(forward));
-}
 // A ray crossing must enter a cell with occupied or enabled grid elements.
 // Candidate availability is still checked separately after neighbor fallback.
 bool NearStructure(BuildingManager::BuildingID id,
@@ -53,38 +33,31 @@ Grid::Slot CrossedFace(const RE::NiPoint3 &point, int axis) {
   return face;
 }
 } // namespace
-float GetRayDistanceTo(const RE::NiPoint3 &point) {
-  const auto camera = RE::PlayerCamera::GetSingleton();
-  return camera && camera->cameraRoot
-             ? std::max(0.0F, (point - Origin(camera)).Dot(Direction(camera)))
-             : 0;
-}
 Result
-CastGridRay(float maximum, Grid::SnapMode mode, Grid::Settings settings,
+CastGridRay(const RE::NiPoint3 &worldOrigin, const RE::NiPoint3 &d,
+            float maximum, Grid::SnapMode mode, Grid::Settings settings,
             std::optional<BuildingManager::BuildingID> requestedBuilding) {
   using namespace BuildingManager;
-  const auto camera = RE::PlayerCamera::GetSingleton();
+  if (maximum <= 0 || d.Dot(d) < .000001F || mode == Grid::SnapMode::kNone)
+    return {};
   if (!requestedBuilding && settings.sideRole == Grid::SideRole::kDoor) {
     // Openings may belong to a different grid than the last object aimed at.
     // Compare actual ray/plane crossings, never distances to face centers.
-    if (!camera || !camera->cameraRoot)
-      return {};
-    const auto origin = Origin(camera), direction = Direction(camera);
     Result selected;
     float nearest = maximum;
     for (const auto &[buildingID, grid] : GetBuildings()) {
-      const auto candidate = CastGridRay(maximum, mode, settings, buildingID);
+      const auto candidate = CastGridRay(worldOrigin, d, maximum, mode, settings, buildingID);
       if (!candidate.didSnap)
         continue;
       const auto normal =
           candidate.type == GridObjectType::kSideX
               ? RE::NiPoint3{std::cos(grid.yaw), -std::sin(grid.yaw), 0}
               : RE::NiPoint3{std::sin(grid.yaw), std::cos(grid.yaw), 0};
-      const float denominator = direction.Dot(normal);
+      const float denominator = d.Dot(normal);
       if (std::abs(denominator) < .000001F)
         continue;
       const float distance =
-          (candidate.position - origin).Dot(normal) / denominator;
+          (candidate.position - worldOrigin).Dot(normal) / denominator;
       if (!selected.didSnap || distance < nearest) {
         selected = candidate;
         nearest = distance;
@@ -94,14 +67,9 @@ CastGridRay(float maximum, Grid::SnapMode mode, Grid::Settings settings,
   }
   const auto id = requestedBuilding ? requestedBuilding : GetLastSeenBuilding();
   const auto building = id ? GetBuilding(*id) : std::nullopt;
-  if (!building || !camera || !camera->cameraRoot || maximum <= 0 ||
-      mode == Grid::SnapMode::kNone)
+  if (!building)
     return {};
-  const auto worldOrigin = Origin(camera);
   const auto delta = worldOrigin - building->origin;
-  const auto d = Direction(camera);
-  if (d.Dot(d) < .000001F)
-    return {};
   const float c = std::cos(building->yaw), s = std::sin(building->yaw);
   const RE::NiPoint3 origin{delta.x * c - delta.y * s,
                             delta.x * s + delta.y * c, delta.z},

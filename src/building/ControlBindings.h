@@ -1,52 +1,67 @@
 #pragma once
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <SKSE/InputMap.h>
+#include <atomic>
 
 namespace SkyBuild::ControlBindings {
-struct KeyboardBinding {
-  std::uint32_t code;
-  const char *iconKey;
-  RE::INPUT_DEVICE device{RE::INPUT_DEVICE::kKeyboard};
+inline std::atomic_bool gamepadInUse{false};
+struct InputBinding {
+  std::uint32_t code{};
+  const char *icon{""};
+};
+struct Binding {
+  InputBinding keyboardMouse{}, gamepad{};
+  const char *Icon() const {
+    return (gamepadInUse.load() ? gamepad : keyboardMouse).icon;
+  }
 };
 
-inline std::array<KeyboardBinding, 2> modifyControls{
-    {{RE::BSKeyboardDevice::Key::kC, "KeyC"},
-     {RE::BSKeyboardDevice::Key::kE, "KeyE"}}};
-inline KeyboardBinding openMenu{RE::BSKeyboardDevice::Key::kM, "KeyM"};
-inline KeyboardBinding brushIncrease{8, "MouseWheelUp",
-                                     RE::INPUT_DEVICE::kMouse};
-inline KeyboardBinding brushDecrease{9, "MouseWheelDown",
-                                     RE::INPUT_DEVICE::kMouse};
-inline KeyboardBinding historyUndo{RE::BSKeyboardDevice::Key::kZ, "KeyZ"};
-inline KeyboardBinding historyRedo{RE::BSKeyboardDevice::Key::kX, "KeyX"};
-// Fine adjustments have their own context, so bindings may overlap build
-// controls.
-inline std::array<KeyboardBinding, 14> fineControls{{{203, "ArrowLeft"},
-                                                     {205, "ArrowRight"},
-                                                     {200, "ArrowUp"},
-                                                     {208, "ArrowDown"},
-                                                     {201, "PageUp"},
-                                                     {209, "PageDown"},
-                                                     {36, "KeyJ"},
-                                                     {38, "KeyL"},
-                                                     {23, "KeyI"},
-                                                     {37, "KeyK"},
-                                                     {22, "KeyU"},
-                                                     {24, "KeyO"},
-                                                     {12, "Minus"},
-                                                     {13, "Equal"}}};
-// Input handling and control hints share these bindings.
-inline KeyboardBinding toggleSnapping{RE::BSKeyboardDevice::Key::kT, "KeyT"};
-inline KeyboardBinding fineAdjustments{RE::BSKeyboardDevice::Key::kF, "KeyF"};
-inline KeyboardBinding rotate{RE::BSKeyboardDevice::Key::kR, "KeyR"};
-inline KeyboardBinding rotateCounterclockwise{0, ""};
-inline KeyboardBinding secondaryAction{1, "MouseRight",
-                                       RE::INPUT_DEVICE::kMouse};
-inline KeyboardBinding placeAction{0, "MouseLeft", RE::INPUT_DEVICE::kMouse};
-inline KeyboardBinding switchMode{2, "MouseMiddle", RE::INPUT_DEVICE::kMouse};
-inline KeyboardBinding packPrevious{RE::BSKeyboardDevice::Key::kC, "KeyC"};
-inline KeyboardBinding packNext{RE::BSKeyboardDevice::Key::kV, "KeyV"};
-inline KeyboardBinding categoryLeft{RE::BSKeyboardDevice::Key::kQ, "KeyQ"};
-inline KeyboardBinding categoryRight{RE::BSKeyboardDevice::Key::kE, "KeyE"};
-inline KeyboardBinding scrollLeft{9, "MouseWheelDown",
-                                  RE::INPUT_DEVICE::kMouse};
-inline KeyboardBinding scrollRight{8, "MouseWheelUp", RE::INPUT_DEVICE::kMouse};
+inline std::uint32_t InputCode(const RE::ButtonEvent &button) {
+  switch (button.GetDevice()) {
+  case RE::INPUT_DEVICE::kKeyboard:
+    return button.GetIDCode();
+  case RE::INPUT_DEVICE::kMouse:
+    return button.GetIDCode() + 256U;
+  case RE::INPUT_DEVICE::kGamepad:
+    return SKSE::InputMap::GamepadMaskToKeycode(button.GetIDCode());
+  default:
+    return SKSE::InputMap::kMaxMacros;
+  }
+}
+inline void Observe(const RE::ButtonEvent &button) {
+  if (button.IsDown())
+    gamepadInUse.store(button.GetDevice() == RE::INPUT_DEVICE::kGamepad);
+}
+inline void ObserveEvent(const RE::InputEvent &event) {
+  if (const auto *button = event.AsButtonEvent())
+    Observe(*button);
+  else if (const auto *stick = event.AsThumbstickEvent()) {
+    if (std::hypot(stick->xValue, stick->yValue) > .25F)
+      gamepadInUse.store(true);
+  } else if (const auto *mouse = event.AsMouseMoveEvent()) {
+    if (mouse->mouseInputX || mouse->mouseInputY)
+      gamepadInUse.store(false);
+  }
+}
+inline bool Matches(const RE::ButtonEvent &button, const Binding &binding) {
+  const auto &input = button.GetDevice() == RE::INPUT_DEVICE::kGamepad
+                          ? binding.gamepad : binding.keyboardMouse;
+  return input.code != 0 && InputCode(button) == input.code;
+}
+inline Binding MakeBinding(std::uint32_t code, const char *icon,
+                           std::uint32_t gamepadCode, const char *gamepadIcon) {
+  return {{code, icon}, {gamepadCode, gamepadIcon}};
+}
+
+// Settings::Apply initializes both device bindings before input hooks are installed.
+inline std::array<Binding, 2> modifyControls{};
+inline std::array<Binding, 14> fineControls{};
+inline Binding fineConfirm{}, fineCancel{}, openMenu{};
+inline Binding brushIncrease{}, brushDecrease{}, historyUndo{}, historyRedo{};
+inline Binding toggleSnapping{}, fineAdjustments{}, rotate{}, rotateCounterclockwise{};
+inline Binding secondaryAction{}, placeAction{}, switchMode{};
+inline Binding packPrevious{}, packNext{}, categoryLeft{}, categoryRight{};
+inline Binding scrollLeft{}, scrollRight{};
 } // namespace SkyBuild::ControlBindings

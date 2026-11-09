@@ -1,6 +1,6 @@
 #pragma once
 #include "building/BuildCostData.h"
-#include "ui/thumbnails/ThumbnailRenderer.h"
+#include "models/ModelData.h"
 #include "building/PackIdentity.h"
 
 #include "building/PlacementPreview.h"
@@ -11,7 +11,7 @@
 namespace SkyBuild::PlaceableRegistry {
 struct Definition {
   Packs::Identity identity;
-  std::optional<UI::ThumbnailRenderer::Bounds> selectionBounds;
+  std::optional<Models::Bounds> selectionBounds;
   std::vector<BuildCosts::Material> requiredMaterials;
   std::string packName{};
   std::string name{};

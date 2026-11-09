@@ -53,7 +53,7 @@ struct RegistryLifetime {
 HWND hwnd{};
 WNDPROC originalWndProc{};
 REL::Relocation<void(std::uint32_t)> originalRender;
-enum class InputKind { Key, Mouse, Wheel, Character, Motion };
+enum class InputKind { Key, Mouse, Wheel, Character, Motion, Gamepad, Stick };
 struct Input {
   InputKind kind;
   unsigned code;
@@ -63,7 +63,7 @@ struct Input {
 std::vector<Input> inputQueue;
 std::array<bool, 8> modifiers{};
 InputOwnership inputOwnership; // Protected by inputMutex.
-ImVec2 cursor{};
+ImVec2 cursor{}, gamepadCursor{};
 constexpr auto menuName = "SkyBuildWorkspace";
 
 class WorkspaceMenu : public RE::IMenu {
@@ -104,7 +104,8 @@ bool InitializeRenderer() {
   auto &io = ImGui::GetIO();
   io.IniFilename = "Data/SkyBuild/ImGui.ini";
   io.LogFilename = nullptr;
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
   io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
   io.ConfigInputTrickleEventQueue = true;
   ImFontConfig fontConfig;
@@ -175,6 +176,7 @@ void DrainInput(bool interactive) {
     io.ClearInputCharacters();
     pending.clear();
     modifiers.fill(false);
+    gamepadCursor = {};
     SKSE::GetTaskInterface()->AddTask([] {
       UI::CancelToolWheel();
       Terrain::SuspendInput();
@@ -206,6 +208,39 @@ void DrainInput(bool interactive) {
         }
       break;
     }
+    case InputKind::Gamepad: {
+      static constexpr std::array<ImGuiKey, 16> keys{
+          ImGuiKey_GamepadDpadUp,   ImGuiKey_GamepadDpadDown,
+          ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadDpadRight,
+          ImGuiKey_GamepadStart,    ImGuiKey_GamepadBack,
+          ImGuiKey_GamepadL3,       ImGuiKey_GamepadR3,
+          ImGuiKey_GamepadL1,       ImGuiKey_GamepadR1,
+          ImGuiKey_GamepadFaceDown, ImGuiKey_GamepadFaceRight,
+          ImGuiKey_GamepadFaceLeft, ImGuiKey_GamepadFaceUp,
+          ImGuiKey_GamepadL2,       ImGuiKey_GamepadR2};
+      if (event.code >= 266 && event.code < 282) {
+        io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+        io.AddKeyEvent(keys[event.code - 266], event.down);
+        if (event.code == 280 || event.code == 281)
+          io.AddMouseButtonEvent(event.code == 281 ? 0 : 1, event.down);
+      }
+      break;
+    }
+    case InputKind::Stick:
+      if (event.code == 1) {
+        gamepadCursor = {event.x, -event.y};
+      } else {
+        io.BackendFlags |= ImGuiBackendFlags_HasGamepad;
+        const auto axis = [&](ImGuiKey key, float value) {
+          const float amount = std::clamp((value - .2F) / .8F, 0.F, 1.F);
+          io.AddKeyAnalogEvent(key, amount > 0.F, amount);
+        };
+        axis(ImGuiKey_GamepadLStickLeft, -event.x);
+        axis(ImGuiKey_GamepadLStickRight, event.x);
+        axis(ImGuiKey_GamepadLStickUp, event.y);
+        axis(ImGuiKey_GamepadLStickDown, -event.y);
+      }
+      break;
     case InputKind::Mouse:
       io.AddMouseButtonEvent(event.code, event.down);
       break;
@@ -222,6 +257,22 @@ void DrainInput(bool interactive) {
         io.AddMousePosEvent(cursor.x, cursor.y);
       break;
     }
+  }
+  if (interactive) {
+    const auto speed = [](float value) {
+      const float magnitude = std::abs(value);
+      return magnitude > .2F ? std::copysign((magnitude - .2F) / .8F, value)
+                             : 0.F;
+    };
+    cursor.x =
+        std::clamp(cursor.x + speed(gamepadCursor.x) * 900.F * io.DeltaTime,
+                   0.F, io.DisplaySize.x);
+    cursor.y =
+        std::clamp(cursor.y + speed(gamepadCursor.y) * 900.F * io.DeltaTime,
+                   0.F, io.DisplaySize.y);
+    io.AddMousePosEvent(cursor.x, cursor.y);
+  } else {
+    gamepadCursor = {};
   }
   io.MouseDrawCursor = interactive && GetForegroundWindow() == hwnd;
 }
@@ -285,7 +336,9 @@ void Render(std::uint32_t argument) {
   ImGui_ImplDX11_NewFrame();
   ImGui_ImplWin32_NewFrame();
   DrainInput(interactive || UI::WheelHasCursor());
+  Widgets::PrepareGamepadNavigation();
   ImGui::NewFrame();
+  Widgets::BeginFrame();
   iam_update_begin_frame();
   if (ImGui::GetFrameCount() % 60 == 0)
     iam_gc(600);
@@ -348,8 +401,14 @@ bool CaptureInputEvent(RE::InputEvent *event) {
     if (auto *button = event->AsButtonEvent()) {
       const bool mouse = button->GetDevice() == RE::INPUT_DEVICE::kMouse;
       const bool keyboard = button->GetDevice() == RE::INPUT_DEVICE::kKeyboard;
-      if (!mouse && !keyboard)
+      const bool gamepad = button->GetDevice() == RE::INPUT_DEVICE::kGamepad;
+      if (!mouse && !keyboard && !gamepad)
         return false;
+      if (gamepad) {
+        const auto *controls = RE::ControlMap::GetSingleton();
+        Widgets::SetGamepadIcons(controls && controls->GetGamePadType() ==
+                                                 RE::PC_GAMEPAD_TYPE::kOrbis);
+      }
       const auto code = button->GetIDCode();
       // Wheel directions are pulses, not buttons with a matching release.
       // Never retain ownership of them: doing so captures gameplay scrolling
@@ -360,26 +419,27 @@ bool CaptureInputEvent(RE::InputEvent *event) {
               {InputKind::Wheel, 0, false, 0, code == 8 ? 1.F : -1.F});
         return consume;
       }
-      const auto slot = code + (mouse ? 256U : 0U);
-      // The hammer owns every SkyBuild shortcut; M remains the game's map
-      // binding whenever the player is outside that context.
-      if (slot == Settings::MenuBinding() && BuildingMode::IsHammerReady() &&
-          !blockingWindow && !UI::IsGameMenuBlocking()) {
+      const auto slot = ControlBindings::InputCode(*button);
+      if (!UI::FineAdjustments::IsOpen() &&
+          ControlBindings::Matches(*button, ControlBindings::openMenu) &&
+          BuildingMode::IsHammerReady() && !blockingWindow &&
+          !UI::IsGameMenuBlocking()) {
         if (button->IsDown())
           UI::OpenMainMenu();
         else if (button->IsUp())
           UI::FinishToolWheel();
         consume = true;
       }
-      if (UI::WheelHasCursor() && !blockingWindow &&
+      if (UI::IsToolWheelOpen() && !blockingWindow &&
           BuildingMode::IsHammerReady()) {
         const auto matches = [&](const auto &binding) {
-          return button->GetDevice() == binding.device && code == binding.code;
+          return ControlBindings::Matches(*button, binding);
         };
-        if (matches(ControlBindings::placeAction) ||
-            matches(ControlBindings::secondaryAction)) {
+        const bool pad = button->GetDevice() == RE::INPUT_DEVICE::kGamepad;
+        const bool confirm = pad ? slot == 276 : matches(ControlBindings::placeAction);
+        const bool cancel = pad ? slot == 277 : matches(ControlBindings::secondaryAction);
+        if (confirm || cancel) {
           if (button->IsDown()) {
-            const bool cancel = matches(ControlBindings::secondaryAction);
             SKSE::GetTaskInterface()->AddTask([cancel] {
               if (cancel)
                 UI::CancelToolWheel();
@@ -391,10 +451,13 @@ bool CaptureInputEvent(RE::InputEvent *event) {
         }
       }
       const auto &toolBinding = ControlBindings::switchMode;
-      if (UI::WheelHasCursor() && button->GetDevice() == toolBinding.device &&
-          code == toolBinding.code && BuildingMode::IsHammerReady()) {
+      if (UI::IsToolWheelOpen() &&
+          ControlBindings::Matches(*button, toolBinding) && !blockingWindow &&
+          BuildingMode::IsHammerReady()) {
         if (button->IsDown())
           UI::OpenToolWheel();
+        else if (button->IsUp())
+          UI::FinishToolWheel();
         consume = true;
       }
       consume = inputOwnership.Consume(slot, button->IsDown(), button->IsUp(),
@@ -407,6 +470,18 @@ bool CaptureInputEvent(RE::InputEvent *event) {
         inputQueue.push_back({InputKind::Mouse, code, button->IsDown()});
       else if (keyboard)
         inputQueue.push_back({InputKind::Key, code, button->IsDown()});
+      else if (gamepad && (blockingWindow || button->IsUp()))
+        inputQueue.push_back({InputKind::Gamepad, slot, button->IsDown()});
+    } else if (const auto *stick = event->AsThumbstickEvent()) {
+      if (UI::IsToolWheelOpen() && !blockingWindow) {
+        UI::PointToolWheel(stick->xValue, -stick->yValue);
+        return true;
+      }
+      if (blockingWindow) {
+        inputQueue.push_back({InputKind::Stick, stick->IsRight() ? 1U : 0U,
+                              false, stick->xValue, stick->yValue});
+        return true;
+      }
     } else if (consume) {
       if (const auto *character = event->AsCharEvent())
         inputQueue.push_back({InputKind::Character, character->keyCode, false});

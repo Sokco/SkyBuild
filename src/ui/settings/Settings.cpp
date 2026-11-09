@@ -25,7 +25,6 @@
 
 namespace SkyBuild::Settings {
 namespace {
-std::atomic<std::uint32_t> menuBinding{MenuToggleKey};
 std::atomic_bool sandboxMode{false};
 std::atomic<float> buildingCostMultiplier{1.F};
 std::atomic_bool quickMain{false}, quickTools{true};
@@ -34,82 +33,99 @@ struct Key {
   const char *label;
   const char *icon;
 };
-constexpr Key keys[]{{1, "Escape", "Escape"},
-                     {12, "Minus", "Minus"},
-                     {13, "Plus / Equals", "Equal"},
-                     {16, "Q", "KeyQ"},
-                     {17, "W", "KeyW"},
-                     {18, "E", "KeyE"},
-                     {19, "R", "KeyR"},
-                     {20, "T", "KeyT"},
-                     {21, "Y", "KeyY"},
-                     {22, "U", "KeyU"},
-                     {23, "I", "KeyI"},
-                     {24, "O", "KeyO"},
-                     {25, "P", "KeyP"},
-                     {30, "A", "KeyA"},
-                     {31, "S", "KeyS"},
-                     {32, "D", "KeyD"},
-                     {33, "F", "KeyF"},
-                     {34, "G", "KeyG"},
-                     {35, "H", "KeyH"},
-                     {36, "J", "KeyJ"},
-                     {37, "K", "KeyK"},
-                     {38, "L", "KeyL"},
-                     {44, "Z", "KeyZ"},
-                     {45, "X", "KeyX"},
-                     {46, "C", "KeyC"},
-                     {47, "V", "KeyV"},
-                     {48, "B", "KeyB"},
-                     {49, "N", "KeyN"},
-                     {50, "M", "KeyM"},
-                     {2, "1", "Digit1"},
-                     {3, "2", "Digit2"},
-                     {4, "3", "Digit3"},
-                     {5, "4", "Digit4"},
-                     {6, "5", "Digit5"},
-                     {7, "6", "Digit6"},
-                     {8, "7", "Digit7"},
-                     {9, "8", "Digit8"},
-                     {10, "9", "Digit9"},
-                     {11, "0", "Digit0"},
-                     {59, "F1", "F1"},
-                     {60, "F2", "F2"},
-                     {61, "F3", "F3"},
-                     {62, "F4", "F4"},
-                     {63, "F5", "F5"},
-                     {64, "F6", "F6"},
-                     {65, "F7", "F7"},
-                     {66, "F8", "F8"},
-                     {67, "F9", "F9"},
-                     {68, "F10", "F10"},
-                     {87, "F11", "F11"},
-                     {88, "F12", "F12"},
-                     {203, "Left", "ArrowLeft"},
-                     {205, "Right", "ArrowRight"},
-                     {200, "Up", "ArrowUp"},
-                     {208, "Down", "ArrowDown"},
-                     {57, "Space", "Space"},
-                     {28, "Enter", "Enter"},
-                     {15, "Tab", "Tab"},
-                     {256, "Left mouse", "MouseLeft"},
-                     {257, "Right mouse", "MouseRight"},
-                     {258, "Middle mouse", "MouseMiddle"},
-                     {264, "Scroll up", "MouseWheelUp"},
-                     {265, "Scroll down", "MouseWheelDown"},
-                     {14, "Backspace", "Backspace"},
-                     {29, "Left Ctrl", "ControlLeft"},
-                     {157, "Right Ctrl", "ControlRight"},
-                     {42, "Left Shift", "ShiftLeft"},
-                     {54, "Right Shift", "ShiftRight"},
-                     {56, "Left Alt", "AltLeft"},
-                     {184, "Right Alt", "AltRight"},
-                     {199, "Home", "Home"},
-                     {207, "End", "End"},
-                     {201, "Page Up", "PageUp"},
-                     {209, "Page Down", "PageDown"},
-                     {210, "Insert", "Insert"},
-                     {211, "Delete", "Delete"}};
+constexpr Key keys[]{
+    {1, "Escape", "Escape"},
+    {12, "Minus", "Minus"},
+    {13, "Plus / Equals", "Equal"},
+    {16, "Q", "KeyQ"},
+    {17, "W", "KeyW"},
+    {18, "E", "KeyE"},
+    {19, "R", "KeyR"},
+    {20, "T", "KeyT"},
+    {21, "Y", "KeyY"},
+    {22, "U", "KeyU"},
+    {23, "I", "KeyI"},
+    {24, "O", "KeyO"},
+    {25, "P", "KeyP"},
+    {30, "A", "KeyA"},
+    {31, "S", "KeyS"},
+    {32, "D", "KeyD"},
+    {33, "F", "KeyF"},
+    {34, "G", "KeyG"},
+    {35, "H", "KeyH"},
+    {36, "J", "KeyJ"},
+    {37, "K", "KeyK"},
+    {38, "L", "KeyL"},
+    {44, "Z", "KeyZ"},
+    {45, "X", "KeyX"},
+    {46, "C", "KeyC"},
+    {47, "V", "KeyV"},
+    {48, "B", "KeyB"},
+    {49, "N", "KeyN"},
+    {50, "M", "KeyM"},
+    {2, "1", "Digit1"},
+    {3, "2", "Digit2"},
+    {4, "3", "Digit3"},
+    {5, "4", "Digit4"},
+    {6, "5", "Digit5"},
+    {7, "6", "Digit6"},
+    {8, "7", "Digit7"},
+    {9, "8", "Digit8"},
+    {10, "9", "Digit9"},
+    {11, "0", "Digit0"},
+    {59, "F1", "F1"},
+    {60, "F2", "F2"},
+    {61, "F3", "F3"},
+    {62, "F4", "F4"},
+    {63, "F5", "F5"},
+    {64, "F6", "F6"},
+    {65, "F7", "F7"},
+    {66, "F8", "F8"},
+    {67, "F9", "F9"},
+    {68, "F10", "F10"},
+    {87, "F11", "F11"},
+    {88, "F12", "F12"},
+    {203, "Left", "ArrowLeft"},
+    {205, "Right", "ArrowRight"},
+    {200, "Up", "ArrowUp"},
+    {208, "Down", "ArrowDown"},
+    {57, "Space", "Space"},
+    {28, "Enter", "Enter"},
+    {15, "Tab", "Tab"},
+    {256, "Left mouse", "MouseLeft"},
+    {257, "Right mouse", "MouseRight"},
+    {258, "Middle mouse", "MouseMiddle"},
+    {264, "Scroll up", "MouseWheelUp"},
+    {265, "Scroll down", "MouseWheelDown"},
+    {14, "Backspace", "Backspace"},
+    {29, "Left Ctrl", "ControlLeft"},
+    {157, "Right Ctrl", "ControlRight"},
+    {42, "Left Shift", "ShiftLeft"},
+    {54, "Right Shift", "ShiftRight"},
+    {56, "Left Alt", "AltLeft"},
+    {184, "Right Alt", "AltRight"},
+    {199, "Home", "Home"},
+    {207, "End", "End"},
+    {201, "Page Up", "PageUp"},
+    {209, "Page Down", "PageDown"},
+    {210, "Insert", "Insert"},
+    {211, "Delete", "Delete"},
+    {266, "D-pad up", "PadUp"},
+    {267, "D-pad down", "PadDown"},
+    {268, "D-pad left", "PadLeft"},
+    {269, "D-pad right", "PadRight"},
+    {270, "Start", "PadStart"},
+    {271, "View / Back", "PadBack"},
+    {272, "Left stick", "PadL3"},
+    {273, "Right stick", "PadR3"},
+    {274, "LB / L1", "PadLB"},
+    {275, "RB / R1", "PadRB"},
+    {276, "A / Cross", "PadA"},
+    {277, "B / Circle", "PadB"},
+    {278, "X / Square", "PadX"},
+    {279, "Y / Triangle", "PadY"},
+    {280, "LT / L2", "PadLT"},
+    {281, "RT / R2", "PadRT"}};
 using Fields::actions;
 using Fields::BrushBindingOffset;
 using Fields::ModifyBindingOffset;
@@ -195,6 +211,7 @@ std::string status;
 std::atomic<bool> capturing{false};
 std::atomic<std::uint32_t> capturedCode{0}, heldCode{0};
 int captureAction = -1;
+std::atomic_bool captureGamepad{false};
 std::unique_ptr<SkyBuild::UI::Native::Model::Event> menuSubscription;
 bool CaptureButton(RE::InputEvent *event) {
   const auto button = event ? event->AsButtonEvent() : nullptr;
@@ -202,10 +219,12 @@ bool CaptureButton(RE::InputEvent *event) {
     return false;
   const auto device = button->GetDevice();
   if (device != RE::INPUT_DEVICE::kKeyboard &&
-      device != RE::INPUT_DEVICE::kMouse)
+      device != RE::INPUT_DEVICE::kMouse &&
+      device != RE::INPUT_DEVICE::kGamepad)
     return false;
-  const auto code =
-      button->GetIDCode() + (device == RE::INPUT_DEVICE::kMouse ? 256U : 0U);
+  const auto code = ControlBindings::InputCode(*button);
+  if ((device == RE::INPUT_DEVICE::kGamepad) != captureGamepad.load() && code != 1)
+    return true;
   // Wheel inputs are pulses; finish capture immediately without waiting for
   // release.
   if (device == RE::INPUT_DEVICE::kMouse &&
@@ -253,68 +272,42 @@ std::filesystem::path Path() { return Paths::Root() / "SkyBuildSettings.json"; }
 void Apply(const Values &values) {
   sandboxMode.store(values.sandboxMode);
   buildingCostMultiplier.store(values.buildingCostMultiplier);
-  menuBinding.store(values.menuKey);
+  const auto *controls = RE::ControlMap::GetSingleton();
+  UI::Widgets::SetGamepadIcons(controls && controls->GetGamePadType() ==
+                                               RE::PC_GAMEPAD_TYPE::kOrbis);
   quickMain.store(values.quickSelectMainMenu);
   quickTools.store(values.quickSelectToolMenu);
   Terrain::SetStrengthPerSecond(values.terrainStrengthPerSecond);
   Navmesh::Diagnostics::SetEnabled(false);
   using namespace ControlBindings;
-  if (const auto key = FindKey(values.menuKey))
-    openMenu = {key->code >= 256 ? key->code - 256 : key->code, key->icon,
-                key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                 : RE::INPUT_DEVICE::kKeyboard};
-  if (const auto key = FindKey(values.secondaryBinding))
-    secondaryAction = {key->code >= 256 ? key->code - 256 : key->code,
-                       key->icon,
-                       key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                        : RE::INPUT_DEVICE::kKeyboard};
-  for (std::size_t i = 0; i < values.modifyBindings.size(); ++i)
-    if (const auto key = FindKey(values.modifyBindings[i]))
-      modifyControls[i] = {key->code >= 256 ? key->code - 256 : key->code,
-                           key->icon,
-                           key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                            : RE::INPUT_DEVICE::kKeyboard};
-  const std::array<KeyboardBinding *, 11> bindings{
+  const auto set = [](Binding &binding, std::uint32_t code,
+                      std::uint32_t padCode) {
+    const auto *key = FindKey(code);
+    const auto *pad = FindKey(padCode);
+    binding =
+        MakeBinding(code, key ? key->icon : "", padCode, pad ? pad->icon : "");
+  };
+  const auto &pad = values.gamepad;
+  set(openMenu, values.menuKey, pad.menuKey);
+  set(secondaryAction, values.secondaryBinding, pad.secondaryBinding);
+  set(fineConfirm, values.fineCompletionBindings[0], pad.fineCompletionBindings[0]);
+  set(fineCancel, values.fineCompletionBindings[1], pad.fineCompletionBindings[1]);
+  set(rotateCounterclockwise, values.counterclockwiseBinding,
+      pad.counterclockwiseBinding);
+  for (std::size_t i = 0; i < modifyControls.size(); ++i)
+    set(modifyControls[i], values.modifyBindings[i], pad.modifyBindings[i]);
+  const std::array<Binding *, 11> bindings{
       &scrollLeft,   &scrollRight,    &categoryLeft,   &categoryRight,
       &packPrevious, &packNext,       &rotate,         &placeAction,
       &switchMode,   &toggleSnapping, &fineAdjustments};
-  for (std::size_t i = 0; i < bindings.size(); ++i) {
-    if (const auto key = FindKey(values.bindings[i])) {
-      bindings[i]->code = key->code >= 256 ? key->code - 256 : key->code;
-      bindings[i]->device = key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                             : RE::INPUT_DEVICE::kKeyboard;
-      bindings[i]->iconKey = key->icon;
-    }
-  }
-  rotateCounterclockwise = {0, ""};
-  if (const auto key = FindKey(values.counterclockwiseBinding))
-    rotateCounterclockwise = {key->code >= 256 ? key->code - 256 : key->code,
-                              key->icon,
-                              key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                               : RE::INPUT_DEVICE::kKeyboard};
-  for (std::size_t i = 0; i < fineControls.size(); ++i) {
-    if (const auto key = FindKey(values.fineBindings[i]))
-      fineControls[i] = {key->code >= 256 ? key->code - 256 : key->code,
-                         key->icon,
-                         key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                          : RE::INPUT_DEVICE::kKeyboard};
-  }
-  const std::array<KeyboardBinding *, 2> terrainControls{&historyUndo,
-                                                         &historyRedo};
-  for (std::size_t i = 0; i < terrainControls.size(); ++i)
-    if (const auto key = FindKey(values.historyBindings[i]))
-      *terrainControls[i] = {key->code >= 256 ? key->code - 256 : key->code,
-                             key->icon,
-                             key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                              : RE::INPUT_DEVICE::kKeyboard};
-  const std::array<KeyboardBinding *, 2> brushControls{&brushIncrease,
-                                                       &brushDecrease};
-  for (std::size_t i = 0; i < brushControls.size(); ++i)
-    if (const auto key = FindKey(values.brushBindings[i]))
-      *brushControls[i] = {key->code >= 256 ? key->code - 256 : key->code,
-                           key->icon,
-                           key->code >= 256 ? RE::INPUT_DEVICE::kMouse
-                                            : RE::INPUT_DEVICE::kKeyboard};
+  for (std::size_t i = 0; i < bindings.size(); ++i)
+    set(*bindings[i], values.bindings[i], pad.bindings[i]);
+  for (std::size_t i = 0; i < fineControls.size(); ++i)
+    set(fineControls[i], values.fineBindings[i], pad.fineBindings[i]);
+  set(historyUndo, values.historyBindings[0], pad.historyBindings[0]);
+  set(historyRedo, values.historyBindings[1], pad.historyBindings[1]);
+  set(brushIncrease, values.brushBindings[0], pad.brushBindings[0]);
+  set(brushDecrease, values.brushBindings[1], pad.brushBindings[1]);
   PlacementPreview::SetOpacity(values.previewOpacity);
   PlacementPreview::SetTint(
       {values.previewTint[0], values.previewTint[1], values.previewTint[2]});
@@ -326,6 +319,57 @@ void Apply(const Values &values) {
   UI::SetIconAppearance(values.iconOpacity, values.iconBrightness);
   UI::RefreshControlBindings();
 }
+nlohmann::json BindingJSON(const Bindings &b) {
+  return {{"mainMenuKey", b.menuKey},
+          {"secondaryAction", b.secondaryBinding},
+          {"fineCompletionBindings", b.fineCompletionBindings},
+          {"rotateCounterclockwise", b.counterclockwiseBinding},
+          {"modifyBindings", b.modifyBindings},
+          {"buildingBindings", b.bindings},
+          {"fineBindings", b.fineBindings},
+          {"historyBindings", b.historyBindings},
+          {"brushBindings", b.brushBindings}};
+}
+void ReadBindings(const nlohmann::json &json, Bindings &b) {
+  b.menuKey = json.value("mainMenuKey", b.menuKey);
+  b.secondaryBinding = json.value("secondaryAction", b.secondaryBinding);
+  b.counterclockwiseBinding =
+      json.value("rotateCounterclockwise", b.counterclockwiseBinding);
+  const auto array = [&](const char *name, auto &target) {
+    if (!json.contains(name))
+      return;
+    const auto &value = json.at(name);
+    if (!value.is_array() || value.size() != target.size())
+      throw std::runtime_error("Invalid binding count");
+    value.get_to(target);
+  };
+  array("modifyBindings", b.modifyBindings);
+  array("buildingBindings", b.bindings);
+  array("fineCompletionBindings", b.fineCompletionBindings);
+  if (json.contains("fineBindings") && json.at("fineBindings").size() == 12) {
+    auto fine = json.at("fineBindings").get<std::vector<std::uint32_t>>();
+    fine.insert(fine.begin() + 10, 2, 0);
+    const auto roll = std::array{b.fineBindings[10], b.fineBindings[11]};
+    std::copy(fine.begin(), fine.end(), b.fineBindings.begin());
+    for (int i = 0; i < 2; ++i)
+      if (roll[i] && std::ranges::find(fine, roll[i]) == fine.end() &&
+          std::ranges::find(b.fineCompletionBindings, roll[i]) ==
+              b.fineCompletionBindings.end())
+        b.fineBindings[10 + i] = roll[i];
+  } else {
+    array("fineBindings", b.fineBindings);
+  }
+  array("historyBindings", b.historyBindings);
+  array("brushBindings", b.brushBindings);
+  if (!json.contains("fineCompletionBindings")) {
+    for (int i = 0; i < 2; ++i)
+      AssignBinding(b, FineCompletionBindingOffset + i, b.fineCompletionBindings[i]);
+  }
+
+}
+bool KnownBinding(std::uint32_t code) {
+  return FindKey(code) != nullptr;
+}
 void Save() {
   try {
     std::filesystem::create_directories(Paths::Root());
@@ -333,32 +377,23 @@ void Save() {
     auto temporary = path;
     temporary += ".tmp";
     std::ofstream output(temporary, std::ios::binary);
-    output << nlohmann::json{{"terrainStrengthPerSecond",
-                              draft.terrainStrengthPerSecond},
-                             {"sandboxMode", draft.sandboxMode},
-                             {"buildingCostMultiplier",
-                              draft.buildingCostMultiplier},
-                             {"mainMenuKey", draft.menuKey},
-                             {"modifyBindings", draft.modifyBindings},
-                             {"secondaryAction", draft.secondaryBinding},
-                             {"rotateCounterclockwise",
-                              draft.counterclockwiseBinding},
-                             {"quickSelectMainMenu", draft.quickSelectMainMenu},
-                             {"quickSelectToolMenu", draft.quickSelectToolMenu},
-                             {"buildingBindings", draft.bindings},
-                             {"fineBindings", draft.fineBindings},
-                             {"historyBindings", draft.historyBindings},
-                             {"brushBindings", draft.brushBindings},
-                             {"uiOpacity", draft.uiOpacity},
-                             {"hudBackgroundOpacity",
-                              draft.hudBackgroundOpacity},
-                             {"previewOpacity", draft.previewOpacity},
-                             {"modifyOpacity", draft.modifyOpacity},
-                             {"iconOpacity", draft.iconOpacity},
-                             {"iconBrightness", draft.iconBrightness},
-                             {"previewTint", draft.previewTint},
-                             {"moveTint", draft.moveTint}}
-                  .dump(2);
+    auto json = nlohmann::json{
+        {"terrainStrengthPerSecond", draft.terrainStrengthPerSecond},
+        {"sandboxMode", draft.sandboxMode},
+        {"buildingCostMultiplier", draft.buildingCostMultiplier},
+        {"gamepadBindings", BindingJSON(draft.gamepad)},
+        {"quickSelectMainMenu", draft.quickSelectMainMenu},
+        {"quickSelectToolMenu", draft.quickSelectToolMenu},
+        {"uiOpacity", draft.uiOpacity},
+        {"hudBackgroundOpacity", draft.hudBackgroundOpacity},
+        {"previewOpacity", draft.previewOpacity},
+        {"modifyOpacity", draft.modifyOpacity},
+        {"iconOpacity", draft.iconOpacity},
+        {"iconBrightness", draft.iconBrightness},
+        {"previewTint", draft.previewTint},
+        {"moveTint", draft.moveTint}};
+    json.update(BindingJSON(draft));
+    output << json.dump(2);
     output.close();
     if (!output || !MoveFileExW(temporary.c_str(), path.c_str(),
                                 MOVEFILE_REPLACE_EXISTING)) {
@@ -388,70 +423,23 @@ void CommitChanges(bool changed) {
 void __stdcall RenderKeybinds() {
   bool changed = false;
   bool openRebind = false;
-
   const auto captured = capturedCode.exchange(0);
   if (captured && captureAction >= 0) {
     if (captured == 1)
       status = "Rebinding cancelled.";
-    else if (captured == draft.menuKey && captureAction != MenuBindingAction)
-      status = "That binding opens SkyBuild settings.";
-    else if (!FindKey(captured))
+    else if ((captured >= 266 && captured < 282) != captureGamepad.load())
+      status = "Use a control from the selected column.";
+    else if (!KnownBinding(captured))
       status = "That key is not supported.";
     else {
-      bool duplicate = false;
-      const auto previous = draft;
-      const bool counterclockwise =
-          captureAction == CounterclockwiseBindingAction;
-      const bool menu = captureAction == MenuBindingAction;
-      const bool secondary = captureAction == SecondaryBindingAction;
-      const bool modify = !counterclockwise && !secondary &&
-                          captureAction >= ModifyBindingOffset;
-      const bool brush = !counterclockwise && !secondary && !modify &&
-                         captureAction >= BrushBindingOffset;
-      const bool history = !counterclockwise && !secondary && !modify &&
-                           !menu && !brush &&
-                           captureAction >= HistoryBindingOffset;
-      const bool fine = !counterclockwise && !secondary && !modify && !menu &&
-                        !brush && !history &&
-                        captureAction >= static_cast<int>(actions.size());
-      const auto index = static_cast<std::size_t>(
-          modify    ? captureAction - ModifyBindingOffset
-          : brush   ? captureAction - BrushBindingOffset
-          : history ? captureAction - HistoryBindingOffset
-          : fine    ? captureAction - static_cast<int>(actions.size())
-                    : captureAction);
-      const auto update = [&](auto &bindings) {
-        for (std::size_t i = 0; i < bindings.size(); ++i)
-          if (i != index && bindings[i] == captured)
-            duplicate = true;
-        if (!duplicate)
-          bindings[index] = captured;
-      };
-      if (counterclockwise)
-        draft.counterclockwiseBinding = captured;
-      else if (secondary)
-        draft.secondaryBinding = captured;
-      else if (modify)
-        update(draft.modifyBindings);
-      else if (menu)
-        draft.menuKey = captured;
-      else if (brush)
-        update(draft.brushBindings);
-      else if (history)
-        update(draft.historyBindings);
-      else if (fine)
-        update(draft.fineBindings);
-      else
-        update(draft.bindings);
-      if (!duplicate && !ValidateAndNormalize(draft, [](auto code) {
-            return FindKey(code) != nullptr;
-          })) {
-        draft = previous;
-        duplicate = true;
-      }
-      if (duplicate)
+      auto &bindings =
+          captureGamepad ? draft.gamepad : static_cast<Bindings &>(draft);
+      const auto before = bindings;
+      AssignBinding(bindings, captureAction, captured);
+      if (!ValidateBindings(bindings, KnownBinding)) {
+        bindings = before;
         status = "That key conflicts with another action in this context.";
-      else {
+      } else {
         changed = true;
         status.clear();
       }
@@ -468,39 +456,56 @@ void __stdcall RenderKeybinds() {
                            : key     ? key->label
                                      : "Unknown");
       },
-      [&](int action) {
-        if (action == -1) {
-          draft.counterclockwiseBinding = 0;
+      [&](int action, bool gamepad) {
+        if (action <= -2) {
+          auto &bindings =
+              gamepad ? draft.gamepad : static_cast<Bindings &>(draft);
+          BindingAt(bindings, -2 - action) = 0;
           changed = true;
           return;
         }
         captureAction = action;
+        captureGamepad = gamepad;
         capturedCode.store(0);
+        heldCode.store(0);
         capturing.store(true);
         openRebind = true;
+      },
+      [](std::uint32_t code) -> std::string_view {
+        const auto *key = FindKey(code);
+        return key ? key->icon : "";
       });
   // Open the popup outside the table's ID scope so its capture modal
   // retains the same identity as the BeginPopupModal call below.
-  if (openRebind)
+  if (openRebind) {
+    ImGui::GetIO().ClearInputKeys();
     ImGui::OpenPopup("Rebind control");
+  }
   if (ImGui::BeginPopupModal("Rebind control", nullptr,
                              ImGui::ImGuiWindowFlags_AlwaysAutoResize)) {
     if (capturing.load()) {
       ImGui::TextUnformatted(
-          "Press a key, mouse button, or scroll direction. Escape cancels.");
-
+          captureGamepad
+              ? "Press and release a gamepad button. Escape cancels."
+              : "Press a key, mouse button, or scroll direction. Escape cancels.");
+      if (captureGamepad.load()) {
+        const auto *key = FindKey(heldCode.load());
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 480.F);
+        ImGui::TextWrapped("%s", key ? key->label : "Waiting for input...");
+        ImGui::PopTextWrapPos();
+      }
     } else {
       ImGui::CloseCurrentPopup();
     }
     ImGui::EndPopup();
   }
-  if (UI::Widgets::FormButton("Reset keybinds")) {
-    draft.menuKey = MenuToggleKey;
-    draft.bindings = Values{}.bindings;
-    draft.counterclockwiseBinding = 0;
-    draft.fineBindings = Values{}.fineBindings;
-    draft.historyBindings = Values{}.historyBindings;
-    draft.brushBindings = Values{}.brushBindings;
+  if (UI::Widgets::FormButton("Reset Mouse & Keyboard")) {
+    static_cast<Bindings &>(draft) = Bindings{};
+    changed = true;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Reset Gamepad")) {
+    draft.gamepad = GamepadDefaults();
     changed = true;
   }
   CommitChanges(changed);
@@ -730,8 +735,10 @@ bool CaptureInput(RE::InputEvent *const *events) {
     return false;
   // Shield the entire batch, including Escape and the framework toggle key.
   // Keep shielding until the render callback acknowledges the released key.
-  for (auto event = *events; event; event = event->next)
+  for (auto event = *events; event; event = event->next) {
+    ControlBindings::ObserveEvent(*event);
     CaptureButton(event);
+  }
   return true;
 }
 void SetMenuOpen(bool open) {
@@ -779,7 +786,6 @@ void __stdcall RenderAdvanced() {
 
 bool SandboxMode() { return sandboxMode.load(); }
 float BuildingCostMultiplier() { return buildingCostMultiplier.load(); }
-std::uint32_t MenuBinding() { return menuBinding.load(); }
 bool QuickSelectMainMenu() { return quickMain.load(); }
 bool QuickSelectToolMenu() { return quickTools.load(); }
 
@@ -790,47 +796,17 @@ void Initialize() {
     if (input) {
       const auto json = nlohmann::json::parse(input);
       Values loaded;
-      loaded.menuKey = json.value("mainMenuKey", MenuToggleKey);
-      loaded.secondaryBinding = json.value("secondaryAction", 257u);
-      loaded.counterclockwiseBinding = json.value("rotateCounterclockwise", 0u);
-      if (json.contains("modifyBindings") &&
-          json["modifyBindings"].size() == loaded.modifyBindings.size())
-        loaded.modifyBindings =
-            json["modifyBindings"].get<decltype(loaded.modifyBindings)>();
+      ReadBindings(json, loaded);
+      if (json.contains("gamepadBindings"))
+        ReadBindings(json.at("gamepadBindings"), loaded.gamepad);
+      if (!ValidateBindings(loaded.gamepad, [](auto code) {
+            return KnownBinding(code) && code >= 266 && code < 282;
+          }))
+        loaded.gamepad = GamepadDefaults();
       loaded.sandboxMode = json.value("sandboxMode", false);
       loaded.buildingCostMultiplier = json.value("buildingCostMultiplier", 1.F);
       loaded.quickSelectMainMenu = json.value("quickSelectMainMenu", false);
       loaded.quickSelectToolMenu = json.value("quickSelectToolMenu", true);
-      if (json.contains("buildingBindings")) {
-        const auto bindings =
-            json.at("buildingBindings").get<std::vector<std::uint32_t>>();
-        if (bindings.size() != loaded.bindings.size())
-          throw std::runtime_error("Invalid binding count");
-        std::copy(bindings.begin(), bindings.end(), loaded.bindings.begin());
-      }
-      if (json.contains("fineBindings")) {
-        const auto bindings =
-            json.at("fineBindings").get<std::vector<std::uint32_t>>();
-        if (bindings.size() == loaded.fineBindings.size())
-          std::copy(bindings.begin(), bindings.end(),
-                    loaded.fineBindings.begin());
-      }
-      if (json.contains("historyBindings")) {
-        const auto bindings =
-            json.at("historyBindings").get<std::vector<std::uint32_t>>();
-        if (bindings.size() != loaded.historyBindings.size())
-          throw std::runtime_error("Invalid terrain binding count");
-        std::copy(bindings.begin(), bindings.end(),
-                  loaded.historyBindings.begin());
-      }
-      if (json.contains("brushBindings")) {
-        const auto bindings =
-            json.at("brushBindings").get<std::vector<std::uint32_t>>();
-        if (bindings.size() != loaded.brushBindings.size())
-          throw std::runtime_error("Invalid brush binding count");
-        std::copy(bindings.begin(), bindings.end(),
-                  loaded.brushBindings.begin());
-      }
       loaded.terrainStrengthPerSecond = json.value(
           "terrainStrengthPerSecond", Terrain::BrushStrengthPerSecond);
       if (loaded.terrainStrengthPerSecond > Terrain::MaxBrushStrengthPerSecond)
@@ -845,8 +821,8 @@ void Initialize() {
       loaded.iconBrightness = json.value("iconBrightness", 1.0F);
       loaded.previewTint = json.value("previewTint", loaded.previewTint);
       loaded.moveTint = json.value("moveTint", loaded.moveTint);
-      if (!ValidateAndNormalize(loaded, [](std::uint32_t key) {
-            return FindKey(key) != nullptr;
+      if (!ValidateAndNormalize(loaded, [](auto code) {
+            return KnownBinding(code) && code < 266;
           })) {
         throw std::runtime_error(
             "Invalid settings values or duplicate bindings");

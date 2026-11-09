@@ -33,7 +33,7 @@ void NativeCellQueryView::Initialize() {
     const auto status = MH_Initialize();
     if (status != MH_OK && status != MH_ERROR_ALREADY_INITIALIZED)
       throw std::runtime_error("Could not initialize native cell-query hook");
-    const REL::Relocation<std::uintptr_t> get{REL::ID(18973)};
+    const REL::Relocation<std::uintptr_t> get{REL::RelocationID(18515, 18973)};
     auto *address = reinterpret_cast<void *>(get.address());
     GetMeshes trampoline{};
     if (MH_CreateHook(address, reinterpret_cast<void *>(&Lookup),

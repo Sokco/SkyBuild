@@ -17,17 +17,12 @@ std::atomic_bool open{};
 std::unique_ptr<SkyBuild::UI::Native::Model::HudElement> hud;
 std::atomic<std::shared_ptr<const nlohmann::json>> frame;
 RE::NiPoint3 originalPosition{}, originalRotation{}, fineAngles{};
-RE::NiMatrix3 fineLocalRotation;
+RE::NiMatrix3 fineRotation;
 FineAdjustmentMath::Vector localForward{0, 1, 0};
 RE::NiPoint3 forward{0, 1, 0}, right{1, 0, 0}, up{0, 0, 1};
-RE::NiMatrix3 RollFrame() {
-  RE::NiMatrix3 roll;
-  roll.SetEulerAnglesXYZ({0, fineAngles.y, 0});
-  return roll;
-}
 RE::NiPoint3 FineRotation() {
   RE::NiPoint3 result;
-  PlacementRotation::ToEulerXYZ(RollFrame() * fineLocalRotation, result);
+  PlacementRotation::ToEulerXYZ(fineRotation, result);
   return result;
 }
 nlohmann::json lastPayload;
@@ -40,9 +35,11 @@ void CaptureMovementAxes() {
   const auto camera = RE::PlayerCamera::GetSingleton();
   localForward = {0, 1, 0};
   if (camera && camera->cameraRoot) {
-    const auto direction = camera->cameraRoot->world.rotate.GetVectorY();
+    auto direction = PlacementPreview::GetState().position - camera->cameraRoot->world.translate;
+    if (direction.x * direction.x + direction.y * direction.y < .000001F)
+      direction = camera->cameraRoot->world.rotate.GetVectorY();
     localForward = FineAdjustmentMath::PlacementForward(
-        direction.x, direction.y, PlacementPreview::GetState().rotation.z);
+        direction.x, direction.y, fineAngles.z);
   }
   const auto localRight = FineAdjustmentMath::Right(localForward);
   forward = {localForward[0], localForward[1], 0};
@@ -57,9 +54,9 @@ void Present() {
   constexpr float degrees = 180.0F / std::numbers::pi_v<float>;
   nlohmann::json bindings = nlohmann::json::object();
   for (std::size_t i = 0; i < ControlBindings::fineControls.size(); ++i)
-    bindings[controls[i]] = ControlBindings::fineControls[i].iconKey;
-  bindings["confirm"] = ControlBindings::placeAction.iconKey;
-  bindings["cancel"] = ControlBindings::secondaryAction.iconKey;
+    bindings[controls[i]] = ControlBindings::fineControls[i].Icon();
+  bindings["confirm"] = ControlBindings::fineConfirm.Icon();
+  bindings["cancel"] = ControlBindings::fineCancel.Icon();
   const auto payload = nlohmann::json{
       {"position", {delta.Dot(right), delta.Dot(forward), delta.Dot(up)}},
       {"rotation",
@@ -89,21 +86,25 @@ void __stdcall Draw() {
   constexpr std::array<const char *, 16> labels{
       "Left",          "Right",          "Forward",     "Backward",
       "Raise",         "Lower",          "Rotate left", "Rotate right",
-      "Pitch forward", "Pitch backward", "Roll left",   "Roll right",
-      "Scale down",    "Scale up",       "Place",       "Cancel adjustments"};
+      "Pitch forward", "Pitch backward", "Roll left", "Roll right",
+      "Scale down",    "Scale up",       "Confirm",       "Cancel adjustments"};
+  const auto &keys = (*view)["bindings"];
   float leftWidth = 0, rightWidth = 0;
   for (std::size_t i = 0; i < labels.size(); i += 2) {
-    leftWidth = std::max(leftWidth, ImGui::CalcTextSize(labels[i]).x);
-    rightWidth = std::max(rightWidth, ImGui::CalcTextSize(labels[i + 1]).x);
+    leftWidth =
+        std::max(leftWidth, Widgets::KeyWidth(keys.value(controls[i], "")) +
+                                10.F + ImGui::CalcTextSize(labels[i]).x);
+    rightWidth = std::max(rightWidth,
+                          Widgets::KeyWidth(keys.value(controls[i + 1], "")) +
+                              10.F + ImGui::CalcTextSize(labels[i + 1]).x);
   }
-  const float column = 58.F + leftWidth + 24.F;
-  const float panelWidth = column + 58.F + rightWidth + 32.F;
+  const float column = leftWidth + 24.F;
+  const float panelWidth = column + rightWidth + 32.F;
   if (Widgets::Panel("Fine adjustments",
                      {screen.x - panelWidth - 25.F, screen.y * .18F},
                      {panelWidth, 0})) {
     ImGui::TextDisabled("FINE ADJUSTMENTS");
     ImGui::Separator();
-    const auto &keys = (*view)["bindings"];
     for (std::size_t i = 0; i < labels.size(); i += 2) {
       if (i == 0) {
         ImGui::TextUnformatted("Position - 4 units");
@@ -116,7 +117,7 @@ void __stdcall Draw() {
         ImGui::Separator();
         ImGui::TextUnformatted("Rotation - 5 degrees");
         const auto &angles = view->at("rotation");
-        ImGui::TextDisabled("Turn %.0f / Tilt %.0f / Roll %.0f",
+        ImGui::TextDisabled("Rotate %.0f / Pitch %.0f / Roll %.0f",
                             angles[0].get<double>(), angles[1].get<double>(),
                             angles[2].get<double>());
       }
@@ -134,6 +135,7 @@ void __stdcall Draw() {
   ImGui::End();
 }
 void Adjust(std::size_t action) {
+  CaptureMovementAxes();
   const auto &s = PlacementPreview::GetState();
   auto position = s.position;
   auto scale = s.scale;
@@ -193,13 +195,10 @@ void Adjust(std::size_t action) {
   default:
     return;
   }
-  if (action >= 6 && action <= 9) {
-    RE::NiMatrix3 increment;
-    const float delta = action % 2 == 0 ? -angle : angle;
-    increment.SetEulerAnglesXYZ(action < 8 ? RE::NiPoint3{0, 0, delta}
-                                           : RE::NiPoint3{delta, 0, 0});
-    // Both axes are fixed in the roll frame, regardless of prior pitch/yaw.
-    fineLocalRotation = increment * fineLocalRotation;
+  if (action >= 6 && action <= 11) {
+    const int axis = action < 8 ? 2 : action < 10 ? 0 : 1;
+    FineAdjustmentMath::RotateLocal(fineRotation, axis,
+                                     action % 2 == 0 ? -angle : angle);
   }
   PlacementPreview::SetFineTransform(position, FineRotation(), scale);
   Present();
@@ -213,8 +212,8 @@ void Open() {
   originalPosition = PlacementPreview::GetState().position;
   RE::NiMatrix3 initial;
   initial.SetEulerAnglesXYZ(PlacementPreview::GetState().rotation);
-  PlacementRotation::ToRollFrame(initial, fineAngles);
-  fineLocalRotation = RollFrame().Transpose() * initial;
+  fineAngles = {0, 0, PlacementPreview::GetState().rotation.z};
+  fineRotation = initial;
   originalRotation = fineAngles;
   CaptureMovementAxes();
   open = true;
@@ -238,27 +237,27 @@ void Update() {
     Close();
     return;
   }
+  CaptureMovementAxes();
   Present();
 }
 bool HandleButton(RE::ButtonEvent *button) {
   if (!open || !button)
     return false;
   const auto matches = [button](const auto &binding) {
-    return button->GetDevice() == binding.device &&
-           button->GetIDCode() == binding.code;
+    return ControlBindings::Matches(*button, binding);
   };
   const bool cancel =
-      matches(ControlBindings::secondaryAction) ||
+      matches(ControlBindings::fineCancel) ||
       (button->GetDevice() == RE::INPUT_DEVICE::kKeyboard &&
        button->GetIDCode() == RE::BSKeyboardDevice::Key::kEscape);
-  if (cancel || matches(ControlBindings::placeAction)) {
+  if (cancel || matches(ControlBindings::fineConfirm)) {
     if (button->IsDown())
       Adjust(cancel ? 15 : 14);
     return true;
   }
   for (std::size_t i = 0; i < ControlBindings::fineControls.size(); ++i) {
     const auto &b = ControlBindings::fineControls[i];
-    if (button->GetDevice() == b.device && button->GetIDCode() == b.code) {
+    if (ControlBindings::Matches(*button, b)) {
       static std::array<KeyRepeat, 14> repeats;
       if (i < repeats.size()
               ? repeats[i].Pulse(button->IsDown(), button->IsPressed(),
@@ -274,7 +273,7 @@ bool HandleButton(RE::ButtonEvent *button) {
        {&fineAdjustments, &rotate, &placeAction, &switchMode, &toggleSnapping,
         &packPrevious, &packNext, &categoryLeft, &categoryRight, &scrollLeft,
         &scrollRight})
-    if (button->GetDevice() == b->device && button->GetIDCode() == b->code)
+    if (ControlBindings::Matches(*button, *b))
       return true;
   return false;
 }

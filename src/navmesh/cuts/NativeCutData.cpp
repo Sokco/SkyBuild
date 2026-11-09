@@ -15,7 +15,7 @@ const std::byte *Bytes(const RE::NiRefObject *value) {
   return reinterpret_cast<const std::byte *>(value);
 }
 bool IsData(const RE::NiRefObject *value) {
-  const REL::Relocation<std::uintptr_t> table{REL::ID(245920)};
+  const REL::Relocation<std::uintptr_t> table{REL::RelocationID(294665, 245920)};
   return value && Read<std::uintptr_t>(Bytes(value), 0) == table.address();
 }
 std::vector<RE::BSNavmeshInfo *> Infos(const RE::NiRefObject *value) {
@@ -34,12 +34,12 @@ std::vector<RE::BSNavmeshInfo *> Infos(const RE::NiRefObject *value) {
 RegisteredCutCensus CaptureRegisteredCutData() {
   using Coordinator = void *(*)();
   using Ready = bool (*)(void *);
-  const REL::Relocation<Coordinator> coordinator{REL::ID(30584)};
-  const REL::Relocation<Ready> ready{REL::ID(91403)};
+  const REL::Relocation<Coordinator> coordinator{REL::RelocationID(29765, 30584)};
+  const REL::Relocation<Ready> ready{REL::RelocationID(88948, 91403)};
   if (!ready(coordinator()))
     throw std::runtime_error(
         "Registered cut census requires ready navigation pause");
-  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::ID(402045)};
+  const REL::Relocation<RE::BSReadWriteLock *> publication{REL::RelocationID(515948, 402045)};
   const auto *owner =
       reinterpret_cast<const volatile std::uint32_t *>(publication.get());
   std::optional<RE::BSWriteLockGuard> guard;
@@ -52,7 +52,7 @@ RegisteredCutCensus CaptureRegisteredCutData() {
       !NativeAuthoredBasis::Available() || loadBefore.active)
     throw std::runtime_error(
         "Registered cut census has active/unobserved native workers");
-  const REL::Relocation<void **> manager{REL::ID(400442)};
+  const REL::Relocation<void **> manager{REL::RelocationID(514282, 400442)};
   auto *bytes = static_cast<const std::byte *>(*manager.get());
   if (!bytes)
     throw std::runtime_error("Registered cut census has no native manager");
@@ -85,7 +85,7 @@ RegisteredCutCensus CaptureRegisteredCutData() {
   queueGuard.reset();
   using Groups = RE::BSTHashMap<std::uint32_t, RE::NiPointer<RE::NiRefObject>>;
   static_assert(sizeof(Groups) == 0x30);
-  const REL::Relocation<std::uintptr_t> groupTable{REL::ID(204241)};
+  const REL::Relocation<std::uintptr_t> groupTable{REL::RelocationID(254758, 204241)};
   std::map<RE::NiRefObject *, RE::NiPointer<RE::NiRefObject>> groups;
   std::map<RE::NiRefObject *, RE::NiPointer<RE::NiRefObject>> retained;
   std::set<RE::NiRefObject *> currentInputs;
@@ -186,7 +186,7 @@ std::vector<NativeCutDataSource> CaptureNativeCutData(
   for (const auto &mesh : loaded)
     if (mesh && mesh->unk110)
       loadedInfos.emplace(mesh->unk110, mesh->QNavmeshID());
-  const REL::Relocation<std::uintptr_t> undoTable{REL::ID(246891)};
+  const REL::Relocation<std::uintptr_t> undoTable{REL::RelocationID(295732, 246891)};
   for (const auto &mesh : loaded) {
     if (!mesh)
       continue;
@@ -227,7 +227,7 @@ std::vector<NativeCutDataSource> CaptureNativeCutData(
       source.owner = Read<void *>(bytes, 0x10);
       if (source.owner) {
         auto *group = static_cast<RE::NiRefObject *>(source.owner);
-        const REL::Relocation<std::uintptr_t> groupTable{REL::ID(204241)};
+        const REL::Relocation<std::uintptr_t> groupTable{REL::RelocationID(254758, 204241)};
         if (Read<std::uintptr_t>(Bytes(group), 0) != groupTable.address())
           throw std::runtime_error(
               "Retained native cut owner group type unsupported");
@@ -278,7 +278,7 @@ NativeCutDataDraft::Create(const NativeCutDataSource &source,
     return nullptr;
   }
   using Construct = RE::NiRefObject *(*)(void *);
-  const REL::Relocation<Construct> construct{REL::ID(91378)};
+  const REL::Relocation<Construct> construct{REL::RelocationID(88926, 91378)};
   draft->data = RE::NiPointer<RE::NiRefObject>(construct(storage));
   const auto bytes = reinterpret_cast<std::byte *>(draft->data.get());
   std::memcpy(bytes + 0x10, &source.owner, sizeof(source.owner));

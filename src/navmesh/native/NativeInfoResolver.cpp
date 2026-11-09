@@ -13,7 +13,7 @@ NativeInfoResolver::NativeInfoResolver(
     : infos(values), allowClearedIdentity(allowClear) {
   if (active)
     throw std::runtime_error("Nested detached info resolution is unsupported");
-  const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::ID(402040)};
+  const REL::Relocation<RE::BSNavmeshInfoMap **> global{REL::RelocationID(515943, 402040)};
   registry = *global.get();
   if (!registry || infos.empty())
     throw std::runtime_error("Missing detached info registry context");

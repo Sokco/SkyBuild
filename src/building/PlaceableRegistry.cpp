@@ -225,23 +225,24 @@ void LoadFile(const std::filesystem::path &a_path, std::string_view a_packName,
       }
 
       definition.localFormID = *localFormID;
-      if (auto *handler = RE::TESDataHandler::GetSingleton())
-        boundsChanged |= Models::EnsureVertexBounds(
-            entry, handler->LookupForm<RE::TESBoundObject>(
-                       *localFormID, definition.pluginName));
+      auto *handler = RE::TESDataHandler::GetSingleton();
+      auto *form =
+          handler ? handler->LookupForm(*localFormID, definition.pluginName)
+                  : nullptr;
+      auto *object = form ? form->As<RE::TESBoundObject>() : nullptr;
+      if (object)
+        boundsChanged |= Models::EnsureVertexBounds(entry, object);
       definition.selectionBounds = Models::DecodeVertexBounds(entry);
       try {
         auto costItem = entry;
         if (entry.value("objectSize", std::string("Medium")) == "Auto")
-          if (auto *handler = RE::TESDataHandler::GetSingleton())
-            if (const auto *object = handler->LookupForm<RE::TESBoundObject>(
-                    *localFormID, definition.pluginName)) {
-              const auto &bounds = object->boundData;
-              costItem["costBounds"] = nlohmann::json::array(
-                  {float(bounds.boundMax.x) - bounds.boundMin.x,
-                   float(bounds.boundMax.y) - bounds.boundMin.y,
-                   float(bounds.boundMax.z) - bounds.boundMin.z});
-            }
+          if (object) {
+            const auto &bounds = object->boundData;
+            costItem["costBounds"] = nlohmann::json::array(
+                {float(bounds.boundMax.x) - bounds.boundMin.x,
+                 float(bounds.boundMax.y) - bounds.boundMin.y,
+                 float(bounds.boundMax.z) - bounds.boundMin.z});
+          }
         definition.requiredMaterials = BuildCosts::Calculate(costItem);
       } catch (const std::exception &error) {
         spdlog::error("Invalid build cost in '{}': {}", a_path.string(),

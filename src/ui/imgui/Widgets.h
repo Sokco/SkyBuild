@@ -7,6 +7,7 @@ namespace SkyBuild::UI::Widgets {
 inline constexpr float TableRowHeight = 30.F;
 void ApplyBaseStyle();
 void SetHUDBackgroundOpacity(float value);
+void SetGamepadIcons(bool playstation);
 struct Theme {
   explicit Theme(float opacity = 1.F);
   ~Theme();
@@ -19,6 +20,7 @@ ImTextureID Texture(const std::filesystem::path &path, float brightness = 1.F,
 void Invalidate(const std::filesystem::path &path, bool discard = false);
 void BeginFrame();
 // Call inside the window, after its children. Popups retain their own focus.
+void PrepareGamepadNavigation();
 bool EscapePressed();
 struct WorkspaceTheme {
   WorkspaceTheme();

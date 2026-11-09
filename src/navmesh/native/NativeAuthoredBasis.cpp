@@ -49,7 +49,7 @@ bool Initialize() {
   // calls the obstacle apply/undo routines. MinHook relocates instructions;
   // Address Library resolves entry points, without byte-prefix assumptions.
   const REL::Relocation<std::uintptr_t> table{RE::VTABLE_NavMesh[0]};
-  const REL::Relocation<std::uintptr_t> method{REL::ID(30327)};
+  const REL::Relocation<std::uintptr_t> method{REL::RelocationID(29479, 30327)};
   if (*reinterpret_cast<const std::uintptr_t *>(table.address() + 6 * 8) !=
       method.address()) {
     spdlog::warn(

@@ -133,32 +133,32 @@ bool Initialize() {
   if (initialized != MH_OK && initialized != MH_ERROR_ALREADY_INITIALIZED)
     return false;
   struct Binding {
-    std::uint64_t id;
+    REL::RelocationID id;
     void *hook;
     void **original;
   };
-  const Binding bindings[]{{90358, reinterpret_cast<void *>(&MeshOnly),
+  const Binding bindings[]{{REL::RelocationID(87976, 90358), reinterpret_cast<void *>(&MeshOnly),
                             reinterpret_cast<void **>(&meshOnlyLookup)},
-                           {90360, reinterpret_cast<void *>(&Mesh),
+                           {REL::RelocationID(87978, 90360), reinterpret_cast<void *>(&Mesh),
                             reinterpret_cast<void **>(&meshLookup)},
-                           {90363, reinterpret_cast<void *>(&Edge),
+                           {REL::RelocationID(87979, 90363), reinterpret_cast<void *>(&Edge),
                             reinterpret_cast<void **>(&edgeLookup)},
-                           {90367, reinterpret_cast<void *>(&ResolveLocation),
+                           {REL::RelocationID(87983, 90367), reinterpret_cast<void *>(&ResolveLocation),
                             reinterpret_cast<void **>(&resolve)},
-                           {90369, reinterpret_cast<void *>(&Closest),
+                           {REL::RelocationID(87985, 90369), reinterpret_cast<void *>(&Closest),
                             reinterpret_cast<void **>(&closest)},
-                           {90378, reinterpret_cast<void *>(&UpdateLocation),
+                           {REL::RelocationID(87994, 90378), reinterpret_cast<void *>(&UpdateLocation),
                             reinterpret_cast<void **>(&update)}};
   std::vector<void *> targets;
   for (const auto &binding : bindings) {
-    const REL::Relocation<std::uintptr_t> method{REL::ID(binding.id)};
+    const REL::Relocation<std::uintptr_t> method{binding.id};
     auto *target = reinterpret_cast<void *>(method.address());
     const auto status = MH_CreateHook(target, binding.hook, binding.original);
     if (status != MH_OK) {
       for (const auto created : targets)
         MH_RemoveHook(created);
       spdlog::error("Native location invalidation unavailable at {}: {}",
-                    binding.id, MH_StatusToString(status));
+                    binding.id.id(), MH_StatusToString(status));
       return false;
     }
     targets.push_back(target);
