@@ -172,17 +172,20 @@ std::vector<std::filesystem::path> PackPaths() {
 }
 void WritePack(const std::filesystem::path &path, const Json &value,
                bool create = false) {
-  auto identityCheck = value;
-  if (Packs::EnsureIdentities(identityCheck))
+  auto saved = value;
+  if (Packs::SchemaVersion(saved) != Packs::CurrentSchemaVersion)
+    throw std::runtime_error("Pack must be migrated before saving.");
+  if (Packs::EnsureIdentities(saved))
     throw std::runtime_error("Pack or item is missing its stable ID.");
-  const auto validation = PackDocument::Validate(value);
+  const auto validation = PackDocument::Validate(saved);
   if (!validation.empty())
     throw std::runtime_error(validation);
+  Packs::BackupLegacyPack(path);
   auto temp = path;
   temp += L".tmp";
   {
     std::ofstream file(temp, std::ios::binary | std::ios::trunc);
-    file << value.dump(2) << '\n';
+    file << saved.dump(2) << '\n';
     file.close();
     if (!file)
       throw std::runtime_error("Could not write pack config.");
@@ -445,6 +448,7 @@ void Load(const std::filesystem::path &path) {
     if (!input)
       throw std::runtime_error("Cannot open pack.");
     Json value = Json::parse(input);
+    (void)Packs::SchemaVersion(value);
     if (!value.contains("placeables") || !value["placeables"].is_array())
       throw std::runtime_error("Invalid item list.");
     for (auto &item : value["placeables"]) {
@@ -460,9 +464,6 @@ void Load(const std::filesystem::path &path) {
     }
     Packs::EnsureIdentities(value);
     PackDocument::EnsureCategories(value);
-    const auto validation = PackDocument::Validate(value);
-    if (!validation.empty())
-      throw std::runtime_error(validation);
     return Result{"Pack loaded.", std::move(value)};
   });
 }
@@ -524,13 +525,6 @@ Json AutomaticValues(const PickerRecord &record, const Json &item,
                      std::string_view section) {
   Json values = Json::object();
   const bool all = section == "all";
-  if (all || section == "size") {
-    values["objectSize"] = "Auto";
-    values["costBounds"] = CostBounds(item);
-  }
-  if (all)
-    values["materials"] =
-        Json::array(); // Triangle-shell analysis assigns texture materials.
   if (all || section == "details" || section == "category")
     values["category"] =
         Packs::SuggestCategory(record.recordType, record.editorID, record.name);
@@ -550,9 +544,7 @@ Json AutomaticValues(const PickerRecord &record, const Json &item,
   return values;
 }
 Json MaterialSnapshot(const Json &item) {
-  auto values = item.value("costMethod", std::string{}) == "componentsPending"
-                    ? Json::array()
-                    : BuildCosts::Encode(BuildCosts::Calculate(item));
+  auto values = BuildCosts::Encode(BuildCosts::Calculate(item));
   for (auto &material : values) {
     const auto found = materialByIdentity.find(
         Identity(material.at("plugin").get<std::string>(), Local(material)));
@@ -581,12 +573,6 @@ Json ItemSnapshot(const Json &item) {
       {"doorway", item.value("doorway", false)},
       {"alignToWall", item.value("alignToWall", false)},
       {"isDoor", IsDoorItem(item)},
-      {"objectSize", item.value("objectSize", std::string("Medium"))},
-      {"materials", item.value("materials", Json::array())},
-      {"costBounds", CostBounds(item)},
-      {"costMethod", item.value("costMethod", std::string{})},
-      {"materialShell", item.value("materialShell", Json(nullptr))},
-      {"materialComponents", item.value("materialComponents", Json(nullptr))},
       {"requiredMaterials", MaterialSnapshot(item)},
       {"iconYaw", item.value("iconYaw", 0.F)},
       {"iconLight", item.value("iconLight", 1.F)},
@@ -747,8 +733,15 @@ void ApplyJob() {
     if (!result.packs.empty())
       packs = std::move(result.packs);
     if (result.document) {
+      const bool migrated = Packs::MigratePack(*result.document, [](auto &item) {
+        if (item.value("objectSize", std::string{}) == "Auto")
+          item["costBounds"] = CostBounds(item);
+      });
+      const auto validation = PackDocument::Validate(*result.document);
+      if (!validation.empty())
+        throw std::runtime_error(validation);
       document = std::move(*result.document);
-      dirty = false;
+      dirty = migrated;
       ++documentRevision;
       RememberPack();
     }
@@ -885,8 +878,9 @@ void UpdateShell() {
         auto edit = *shellTarget;
         edit["action"] = "edit";
         edit["values"] = {
-            {"materialComponents",
-             {{"woodBudget", result.woodBudget}, {"textures", textures}}}};
+            {"requiredMaterials",
+             BuildCosts::Encode(BuildCosts::CalculateComponentCosts(
+                 {{"woodBudget", result.woodBudget}, {"textures", textures}}))}};
 
         Action(edit);
         shellTarget.reset();
@@ -1233,7 +1227,6 @@ void Action(const Json &command) {
     pickedItem->update(AutomaticValues(*found, *pickedItem, "all"));
     Models::EnsureVertexBounds(*pickedItem,
                                RE::TESForm::LookupByID<RE::TESBoundObject>(id));
-    (*pickedItem)["costMethod"] = "manual";
     (*pickedItem)["requiredMaterials"] = Json::array();
     RequestShell(Json{{"pack", selectedPath.stem().string()},
                       {"draft", true},
@@ -1298,13 +1291,10 @@ void Action(const Json &command) {
     const auto &values = command.at("values");
     for (const auto field :
          {"name", "category", "type", "occupy", "freePlaceOffset",
-          "rotationOffset", "doorway", "alignToWall", "requiredMaterials",
-          "objectSize", "materials", "materialShell", "materialComponents",
-          "autoDerivedMaterials", "costMethod"})
+          "rotationOffset", "doorway", "alignToWall", "requiredMaterials"})
       if (values.contains(field))
         candidate[field] = values[field];
     if (values.contains("requiredMaterials")) {
-      candidate["costMethod"] = "manual";
       const auto costs = BuildCosts::Decode(candidate["requiredMaterials"]);
       for (const auto &cost : costs)
         if (!materialByIdentity.contains(Identity(cost.plugin, cost.local)))
@@ -1312,9 +1302,6 @@ void Action(const Json &command) {
               "Required material is not an available inventory item.");
       candidate["requiredMaterials"] = BuildCosts::Encode(costs);
     }
-    if (values.contains("materialComponents"))
-      BuildCosts::RefreshComponentCosts(candidate);
-    candidate["costBounds"] = CostBounds(candidate);
     for (const auto &cost : BuildCosts::Calculate(candidate))
       if (!materialByIdentity.contains(Identity(cost.plugin, cost.local)))
         throw std::runtime_error(

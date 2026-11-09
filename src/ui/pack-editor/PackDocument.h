@@ -3,6 +3,7 @@
 #include "building/BuildCostData.h"
 #include "building/PackIdentityJson.h"
 #include "building/PackCategories.h"
+#include "building/PackSchema.h"
 #include "ui/thumbnails/ThumbnailFormID.h"
 #include "ui/thumbnails/ThumbnailPaths.h"
 #include <algorithm>
@@ -104,7 +105,8 @@ inline bool ValidName(const std::string &name) {
 inline nlohmann::json Create() {
   nlohmann::json categories = nlohmann::json::array();
   Packs::EnsureDefaultCategories(categories);
-  return {{"packId", Packs::Id::New().String()},
+  return {{"schemaVersion", Packs::CurrentSchemaVersion},
+          {"packId", Packs::Id::New().String()},
           {"categories", categories},
           {"placeables", nlohmann::json::array()}};
 }
@@ -240,6 +242,11 @@ inline void DeletePackFile(const std::filesystem::path &root,
     throw std::runtime_error("The pack could not be deleted.");
 }
 inline std::string Validate(const nlohmann::json &document) {
+  try {
+    (void)Packs::SchemaVersion(document);
+  } catch (const std::exception &error) {
+    return error.what();
+  }
   if (!document.is_object() || !document.contains("placeables") ||
       !document["placeables"].is_array())
     return "Pack must contain an item list.";

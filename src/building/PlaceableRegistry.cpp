@@ -4,6 +4,7 @@
 #include "building/BuildingManager.h"
 #include "building/PackIdentityJson.h"
 #include "building/PackCategories.h"
+#include "building/PackSchema.h"
 
 #include <algorithm>
 #include <cctype>
@@ -170,12 +171,32 @@ void LoadFile(const std::filesystem::path &a_path, std::string_view a_packName,
       spdlog::error("Invalid extendBasePack toggle in '{}'.", a_path.string());
       return;
     }
-    if (Packs::EnsureIdentities(document)) {
+    const bool migrated = Packs::MigratePack(document, [](auto &item) {
+      if (item.value("objectSize", std::string{}) != "Auto")
+        return;
+      const auto plugin = item.at("plugin").template get<std::string>();
+      const auto local = ParseFormID(item.at("formId"), plugin);
+      auto *handler = RE::TESDataHandler::GetSingleton();
+      auto *form = local && handler ? handler->LookupForm(*local, plugin) : nullptr;
+      auto *object = form ? form->As<RE::TESBoundObject>() : nullptr;
+      if (object) {
+        const auto &bounds = object->boundData;
+        item["costBounds"] = nlohmann::json::array(
+            {float(bounds.boundMax.x) - bounds.boundMin.x,
+             float(bounds.boundMax.y) - bounds.boundMin.y,
+             float(bounds.boundMax.z) - bounds.boundMin.z});
+      }
+    });
+    const bool identitiesChanged = Packs::EnsureIdentities(document);
+    if (migrated || identitiesChanged) {
       stream.close();
-      auto backup = a_path;
-      backup += ".pre-ids.bak";
-      if (!std::filesystem::exists(backup))
-        std::filesystem::copy_file(a_path, backup);
+      Packs::BackupLegacyPack(a_path);
+      if (identitiesChanged && !migrated) {
+        auto backup = a_path;
+        backup += ".pre-ids.bak";
+        if (!std::filesystem::exists(backup))
+          std::filesystem::copy_file(a_path, backup);
+      }
       auto temporary = a_path;
       temporary += ".tmp";
       std::ofstream output(temporary, std::ios::binary);
@@ -183,7 +204,7 @@ void LoadFile(const std::filesystem::path &a_path, std::string_view a_packName,
       output.close();
       if (!output || !MoveFileExW(temporary.c_str(), a_path.c_str(),
                                   MOVEFILE_REPLACE_EXISTING))
-        throw std::runtime_error("Could not persist stable pack IDs");
+        throw std::runtime_error("Could not persist migrated pack data");
     }
     const auto packId =
         *Packs::Id::Parse(document.at("packId").get<std::string>());
@@ -234,16 +255,7 @@ void LoadFile(const std::filesystem::path &a_path, std::string_view a_packName,
         boundsChanged |= Models::EnsureVertexBounds(entry, object);
       definition.selectionBounds = Models::DecodeVertexBounds(entry);
       try {
-        auto costItem = entry;
-        if (entry.value("objectSize", std::string("Medium")) == "Auto")
-          if (object) {
-            const auto &bounds = object->boundData;
-            costItem["costBounds"] = nlohmann::json::array(
-                {float(bounds.boundMax.x) - bounds.boundMin.x,
-                 float(bounds.boundMax.y) - bounds.boundMin.y,
-                 float(bounds.boundMax.z) - bounds.boundMin.z});
-          }
-        definition.requiredMaterials = BuildCosts::Calculate(costItem);
+        definition.requiredMaterials = BuildCosts::Calculate(entry);
       } catch (const std::exception &error) {
         spdlog::error("Invalid build cost in '{}': {}", a_path.string(),
                       error.what());

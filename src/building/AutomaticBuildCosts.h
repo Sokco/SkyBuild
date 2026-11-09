@@ -166,8 +166,7 @@ inline std::vector<std::string> SuggestCostMaterials(std::string text) {
       result.emplace_back(material.key);
   return result;
 }
-inline void RefreshComponentCosts(nlohmann::json &item) {
-  const auto &analysis = item.at("materialComponents");
+inline std::vector<Material> CalculateComponentCosts(const nlohmann::json &analysis) {
   const bool projected = analysis.contains("woodBudget");
   const double budget = analysis.value("woodBudget", 0.);
   if (projected && (!std::isfinite(budget) || budget < 1. || budget > 1000000.))
@@ -199,33 +198,10 @@ inline void RefreshComponentCosts(nlohmann::json &item) {
         static_cast<int>(std::clamp(std::ceil(quantity), 1., 1000000.));
     derived.push_back({found->plugin, found->local, amount});
   }
-  auto required =
-      Decode(item.value("requiredMaterials", nlohmann::json::array()));
-  const auto previous =
-      Decode(item.value("autoDerivedMaterials", nlohmann::json::array()));
-  const auto same = [](const auto &a, const auto &b) {
-    return a.local == b.local && [](std::string x, std::string y) {
-      std::ranges::transform(
-          x, x.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-      std::ranges::transform(
-          y, y.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-      return x == y;
-    }(a.plugin, b.plugin);
-  };
-  std::erase_if(required, [&](const auto &value) {
-    return std::ranges::any_of(
-               previous, [&](const auto &old) { return same(value, old); }) ||
-           std::ranges::any_of(
-               derived, [&](const auto &next) { return same(value, next); });
-  });
-  required.insert(required.end(), derived.begin(), derived.end());
-  item["requiredMaterials"] = Encode(required);
-  item["autoDerivedMaterials"] = Encode(derived);
-  item["costMethod"] = "components";
+  return derived;
 }
-// Legacy requiredMaterials remains the independent additional-material table.
-// Resolve generated costs once when loading pack definitions, not when drawing.
-inline std::vector<Material> Calculate(const nlohmann::json &item) {
+// Retained only to migrate packs written before schema version 1.
+inline std::vector<Material> CalculateLegacy(const nlohmann::json &item) {
   if (item.value("costMethod", std::string{}) == "components" ||
       item.value("costMethod", std::string{}) == "manual")
     return Decode(item.value("requiredMaterials", nlohmann::json::array()));
@@ -280,5 +256,8 @@ inline std::vector<Material> Calculate(const nlohmann::json &item) {
     }
   }
   return result;
+}
+inline std::vector<Material> Calculate(const nlohmann::json &item) {
+  return Decode(item.value("requiredMaterials", nlohmann::json::array()));
 }
 } // namespace SkyBuild::BuildCosts
