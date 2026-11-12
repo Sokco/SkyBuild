@@ -26,6 +26,19 @@ bool requestRemoval{};
 std::uint64_t searchRequest{}, editRevision{}, addRevision{};
 bool refreshSearch{};
 std::set<std::string> requestedResourceIcons;
+bool BeginDialog(const char *title) {
+  using namespace ImGui;
+  const auto *viewport = GetMainViewport();
+  const float width = std::max(1.F, std::min(480.F, viewport->WorkSize.x - 32.F));
+  SetNextWindowPos(viewport->GetWorkCenter(), ImGuiCond_Appearing, {.5F, .5F});
+  SetNextWindowSizeConstraints({width, 0},
+                              {width, std::max(1.F, viewport->WorkSize.y - 32.F)});
+  if (!BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize |
+                                         ImGuiWindowFlags_NoSavedSettings))
+    return false;
+  Widgets::WorkspaceFont();
+  return true;
+}
 const Json &Array(const Json &value, const char *key) {
   static const Json empty = Json::array();
   const auto found = value.find(key);
@@ -376,6 +389,8 @@ void RequiredMaterials() {
              rowStart.y + (rowHeight - GetTextLineHeight()) * .5F},
             GetColorU32(ImGuiCol_Text), label.c_str());
         SetCursorScreenPos(afterRow);
+        Dummy({0, 0});
+        SetCursorScreenPos(afterRow);
         if (picked) {
           auto material = entry;
           material["amount"] = replacing && *replacing < required.size()
@@ -512,8 +527,7 @@ void ItemForm(const Json &state) {
     newName.clear();
     OpenPopup("Item category");
   }
-  if (BeginPopupModal("Item category", nullptr,
-                      ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (BeginDialog("Item category")) {
     Widgets::WorkspaceFont();
     Widgets::FieldLabel("Name");
     Widgets::Input("##Name", newName, 300);
@@ -1127,8 +1141,7 @@ void __stdcall Draw() {
         Hint("Show this pack's items alongside the base SkyBuild pack.");
         if (Widgets::FormButton("Recalculate all building costs"))
           OpenPopup("Recalculate building costs?");
-        if (BeginPopupModal("Recalculate building costs?", nullptr,
-                            ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (BeginDialog("Recalculate building costs?")) {
           TextWrapped(
               "Are you sure? This recalculates derived materials for every item in this pack. Separately added materials are preserved.");
           Widgets::SpaceBefore();
@@ -1143,8 +1156,7 @@ void __stdcall Draw() {
         }
         if (Widgets::FormButton("Recalculate all bounds"))
           OpenPopup("Recalculate all bounds?");
-        if (BeginPopupModal("Recalculate all bounds?", nullptr,
-                            ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (BeginDialog("Recalculate all bounds?")) {
           TextWrapped(
               "Are you sure? This reads every item's current mesh and replaces its saved selection bounds.");
           Widgets::SpaceBefore();
@@ -1168,8 +1180,7 @@ void __stdcall Draw() {
           OpenPopup("Delete pack?");
         }
         EndDisabled();
-        if (BeginPopupModal("Delete pack?", nullptr,
-                            ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (BeginDialog("Delete pack?")) {
           Widgets::WorkspaceFont();
           TextWrapped("Permanently delete pack %s?", deletePackName.c_str());
           TextUnformatted(
@@ -1312,12 +1323,9 @@ void __stdcall Draw() {
       OpenPopup("Are you sure?");
       requestRemoval = false;
     }
-    if (BeginPopupModal("Are you sure?", nullptr,
-                        ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginDialog("Are you sure?")) {
       Widgets::WorkspaceFont();
-      PushTextWrapPos(480.F);
       TextWrapped("%s", removalLabel.c_str());
-      PopTextWrapPos();
       if (Widgets::FormButton(pendingRemoval.value("action", "") == "discard"
                                   ? "Revert"
                                   : "Remove",
@@ -1335,8 +1343,7 @@ void __stdcall Draw() {
         CloseCurrentPopup();
       EndPopup();
     }
-    if (BeginPopupModal(nameAction == "categoryRename" ? "Rename" : "New name",
-                        nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (BeginDialog(nameAction == "categoryRename" ? "Rename" : "New name")) {
       Widgets::WorkspaceFont();
       Widgets::Input("##Name", newName, 350);
       Widgets::SpaceBefore();

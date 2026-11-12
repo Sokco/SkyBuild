@@ -1248,7 +1248,7 @@ void Update(RE::PlayerCharacter *player) {
                   cells.at(current->GetFormID()).live.has_value());
 }
 float BrushRadius() { return brushRadius.load(); }
-bool HandleButton(RE::ButtonEvent *button) {
+bool HandleButton(const ControlBindings::Event *button) {
   if (!button)
     return false;
   const auto device = button->GetDevice();
@@ -1258,24 +1258,8 @@ bool HandleButton(RE::ButtonEvent *button) {
   };
   if (!Ready())
     return false;
-  if (selectedTool.load() == Tool::Idle &&
-      !matches(ControlBindings::switchMode) && !UI::IsToolWheelOpen())
+  if (selectedTool.load() == Tool::Idle)
     return false;
-  if (matches(ControlBindings::switchMode)) {
-    heldBrush.store(0);
-    tappedBrush.store(0);
-    if (button->IsDown())
-      UI::OpenToolWheel();
-    else if (button->IsUp())
-      UI::FinishToolWheel();
-    return true;
-  }
-  if (UI::IsToolWheelOpen()) {
-    if (device == RE::INPUT_DEVICE::kKeyboard &&
-        key == RE::BSKeyboardDevice::Key::kEscape && button->IsDown())
-      UI::CancelToolWheel();
-    return true;
-  }
 
   if (matches(ControlBindings::historyUndo) ||
       matches(ControlBindings::historyRedo)) {

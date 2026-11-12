@@ -1,14 +1,14 @@
 #include "terrain/brush-overlay/BrushOverlay.h"
+#include "rendering/WorldFrame.h"
 #include "terrain/LandscapeGeometry.h"
 #include "terrain/TerrainSurface.h"
 #include "terrain/TerrainTool.h"
 #include "terrain/brush-overlay/BrushOverlayMath.h"
-#include "terrain/brush-overlay/BrushOverlayRenderer.h"
+#include "terrain/brush-overlay/TerrainBrushPass.h"
 #include "terrain/brush-overlay/BrushOverlayTrace.h"
 #include "ui/imgui/NativeUI.h"
 #include "ui/imgui/UI.h"
 #include <chrono>
-#include <cstring>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -30,8 +30,8 @@ std::unordered_set<RE::BSTriShape *> used;
 std::shared_ptr<Frame> building;
 std::shared_ptr<const Frame> published;
 std::mutex mutex;
-Renderer renderer;
-bool captureWarning{}, renderWarning{}, projectionWarning{};
+TerrainBrushPass terrainPass;
+bool captureWarning{}, renderWarning{};
 
 void AddTriangle(std::array<OverlayVertex, 3> triangle) {
   if (!building || building->triangles.size() >= 180000 ||
@@ -46,6 +46,7 @@ void Begin(const Brush &brush) {
   building->brush = brush;
   used.clear();
   Trace::Capture(true);
+  Rendering::WorldFrame::SetActive(Rendering::WorldFrame::Consumer::TerrainBrush, true);
 }
 void ExpectChunk(std::uint64_t key) {
   if (building)
@@ -100,13 +101,14 @@ void Publish() {
 }
 void Clear() {
   Trace::Capture(false);
+  Rendering::WorldFrame::SetActive(Rendering::WorldFrame::Consumer::TerrainBrush, false);
   building.reset();
   originals.clear();
   used.clear();
   std::scoped_lock lock(mutex);
   published.reset();
 }
-void Render() {
+void Render(Rendering::OverlayBackend &backend) {
   if (!Terrain::Ready() || Terrain::GetTool() == Tool::Idle ||
       UI::Native::IsAnyBlockingWindowOpened() || UI::IsToolWheelOpen())
     return;
@@ -141,74 +143,7 @@ void Render() {
 
   if (triangles.empty())
     return;
-  auto *camera = RE::Main::WorldRootCamera();
-  auto *graphics = RE::BSGraphics::Renderer::GetSingleton();
-  if (!camera || !graphics || REL::Module::IsVR())
-    return;
-  auto &data = graphics->GetRuntimeData();
-  auto *context = reinterpret_cast<ID3D11DeviceContext *>(data.context);
-  auto *target = reinterpret_cast<ID3D11RenderTargetView *>(
-      data.renderWindows[0].renderView);
-  auto *depth = reinterpret_cast<ID3D11ShaderResourceView *>(
-      graphics->GetDepthStencilData()
-          .depthStencils[RE::RENDER_TARGET_DEPTHSTENCIL::kMAIN]
-          .depthSRV);
-  if (!context || !target || !depth)
-    return;
-  auto *graphicsState = RE::BSGraphics::State::GetSingleton();
-  float widthRatio = 1.F, heightRatio = 1.F;
-  if (graphicsState) {
-    const auto &state = graphicsState->GetRuntimeData();
-    if (std::isfinite(state.dynamicResolutionWidthRatio) &&
-        state.dynamicResolutionWidthRatio > 0)
-      widthRatio = std::min(state.dynamicResolutionWidthRatio, 1.F);
-    if (std::isfinite(state.dynamicResolutionHeightRatio) &&
-        state.dynamicResolutionHeightRatio > 0)
-      heightRatio = std::min(state.dynamicResolutionHeightRatio, 1.F);
-  }
-  const auto drawFrame = Trace::SceneFrame();
-  const bool gpuFrame = drawFrame.buffer || Renderer::HasSceneFrame(context);
-  float sceneProjection[4][4]{};
-  float jitterU{}, jitterV{};
-  bool fallbackReversed{};
-  // GPU frame data already contains the actual depth convention and temporal
-  // matrices. CPU fallback validation must not suppress this path.
-  if (!gpuFrame) {
-    auto *shadow = RE::BSGraphics::RendererShadowState::GetSingleton();
-    if (!shadow)
-      return;
-    const auto view = shadow->GetRuntimeData().cameraData.getEye();
-    float projection[4][4];
-    static_assert(sizeof(view.projMat) == sizeof(projection));
-    std::memcpy(projection, &view.projMat, sizeof(projection));
-    const auto &frustum = camera->GetRuntimeData2().viewFrustum;
-    const auto reversed =
-        ReversedDepth(projection, frustum.fNear, frustum.fFar);
-    if (!reversed) {
-      if (!projectionWarning) {
-        spdlog::warn("Brush overlay waiting for a valid perspective scene "
-                     "projection; no depth convention assumed.");
-        projectionWarning = true;
-      }
-      return;
-    }
-
-    fallbackReversed = *reversed;
-    SceneDepthProjection(camera->GetRuntimeData().worldToCam, sceneProjection,
-                         *reversed);
-    // CPU camera projection is unjittered. Sample the scene depth at the
-    // matching jittered location while keeping the visible overlay stable.
-    const float inverseW = 1.F / view.projMat._34;
-    jitterU =
-        (view.projMat._31 - view.projMatrixUnjittered._31) * inverseW * .5F;
-    jitterV =
-        (view.projMat._32 - view.projMatrixUnjittered._32) * inverseW * -.5F;
-    if (!std::isfinite(jitterU) || !std::isfinite(jitterV))
-      return;
-  }
-  if (!renderer.Draw(context, target, depth, triangles, sceneProjection,
-                     frame->brush, widthRatio, heightRatio, jitterU, jitterV,
-                     fallbackReversed, drawFrame)) {
+  if (!terrainPass.Draw(backend, triangles, frame->brush)) {
     if (!renderWarning) {
       spdlog::warn("Brush overlay skipped: unsupported DX11 context/depth view "
                    "or GPU resource creation failed.");

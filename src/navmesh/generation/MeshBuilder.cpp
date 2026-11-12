@@ -604,26 +604,24 @@ BuildResult Build(const BuildInput &input,
     Geometry::Polygon polygon{replacement.vertices[face.vertices[0]],
                               replacement.vertices[face.vertices[1]],
                               replacement.vertices[face.vertices[2]]};
-    if (input.sampledBounds) {
-      const auto &b = *input.sampledBounds;
-      polygon = Clip(polygon, 0, b.left, true);
-      polygon = Clip(polygon, 0, b.right, false);
-      polygon = Clip(polygon, 1, b.bottom, true);
-      polygon = Clip(polygon, 1, b.top, false);
-    }
     const auto emit = [&](const Polygon &piece) {
       for (std::size_t i = 1; i + 1 < piece.size(); ++i)
         writer.TriangleAt(piece[0], piece[i], piece[i + 1], face.flags, true);
     };
     if (input.footprints.empty())
-      emit(polygon);
+      emit(input.sampledBounds ? ClipToBounds(polygon, *input.sampledBounds)
+                               : polygon);
     else
-      for (const auto &r : input.footprints) {
-        auto piece = Clip(polygon, 0, r.left, true);
-        piece = Clip(piece, 0, r.right, false);
-        piece = Clip(piece, 1, r.bottom, true);
-        piece = Clip(piece, 1, r.top, false);
-        emit(piece);
+      for (auto r : input.footprints) {
+        if (input.sampledBounds) {
+          const auto &b = *input.sampledBounds;
+          r.left = std::max(r.left, b.left);
+          r.right = std::min(r.right, b.right);
+          r.bottom = std::max(r.bottom, b.bottom);
+          r.top = std::min(r.top, b.top);
+        }
+        if (r.left < r.right && r.bottom < r.top)
+          emit(ClipToBounds(polygon, r));
       }
   }
   if (progress)

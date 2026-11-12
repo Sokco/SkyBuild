@@ -23,6 +23,16 @@
 #include <nlohmann/json.hpp>
 #include <unordered_set>
 
+namespace SkyBuild {
+void to_json(nlohmann::json &json, const InputChord &chord) {
+  if (chord.keys.size() > 1) json = chord.keys;
+  else json = chord.keys.empty() ? 0U : chord.keys.front();
+}
+void from_json(const nlohmann::json &json, InputChord &chord) {
+  if (json.is_array()) chord.keys = json.get<std::vector<std::uint32_t>>();
+  else chord = InputChord{json.get<std::uint32_t>()};
+}
+}
 namespace SkyBuild::Settings {
 namespace {
 std::atomic_bool sandboxMode{false};
@@ -210,53 +220,57 @@ void __stdcall RenderGenerationProgressWindow() {
 Values draft;
 std::string status;
 std::atomic<bool> capturing{false};
-std::atomic<std::uint32_t> capturedCode{0}, heldCode{0};
+std::mutex captureMutex;
+InputChord capturedChord, heldChord;
+std::vector<std::uint32_t> captureHeldKeys;
 int captureAction = -1;
 std::atomic_bool captureGamepad{false};
 std::unique_ptr<SkyBuild::UI::Native::Model::Event> menuSubscription;
 bool CaptureButton(RE::InputEvent *event) {
   const auto button = event ? event->AsButtonEvent() : nullptr;
-  if (!button)
-    return false;
+  if (!button || !capturing.load()) return false;
   const auto device = button->GetDevice();
-  if (device != RE::INPUT_DEVICE::kKeyboard &&
-      device != RE::INPUT_DEVICE::kMouse &&
-      device != RE::INPUT_DEVICE::kGamepad)
-    return false;
   const auto code = ControlBindings::InputCode(*button);
   if ((device == RE::INPUT_DEVICE::kGamepad) != captureGamepad.load() && code != 1)
     return true;
-  // Wheel inputs are pulses; finish capture immediately without waiting for
-  // release.
-  if (device == RE::INPUT_DEVICE::kMouse &&
-      (button->GetIDCode() == 8 || button->GetIDCode() == 9)) {
-    if (!capturing.load())
-      return false;
-    capturedCode.store(code);
-    heldCode.store(0);
-    capturing.store(false);
-    return true;
-  }
-  if (heldCode.load() == code) {
-    if (button->IsUp()) {
-      capturedCode.store(code);
-      heldCode.store(0);
-      capturing.store(false);
+  if (code >= Input::ChordResolver::KeyCount) return true;
+  const bool wheel = code == 264 || code == 265;
+  if (button->IsDown()) {
+    if (!wheel && std::ranges::find(captureHeldKeys, code) == captureHeldKeys.end())
+      captureHeldKeys.push_back(code);
+    if (code == 1) heldChord = InputChord{1};
+    else if (heldChord != InputChord{1}) {
+      heldChord.keys.clear();
+      if (wheel) {
+        if (!captureHeldKeys.empty()) heldChord.keys.push_back(captureHeldKeys.back());
+        heldChord.keys.push_back(code);
+      } else {
+        const auto count = std::min<std::size_t>(2, captureHeldKeys.size());
+        heldChord.keys.assign(captureHeldKeys.end() - count, captureHeldKeys.end());
+      }
     }
-    return true;
   }
-  if (!capturing.load())
-    return false;
-  if (button->IsDown() && heldCode.load() == 0) {
-    heldCode.store(code);
+  if (button->IsUp()) {
+    std::erase(captureHeldKeys, code);
+    // Keep the final pair when it shrinks to one, so release order does not
+    // turn a chord into a single-button binding.
+    if (captureHeldKeys.size() >= 2 && heldChord != InputChord{1})
+      heldChord.keys.assign(captureHeldKeys.end() - 2, captureHeldKeys.end());
+  }
+  if (heldChord && captureHeldKeys.empty()) {
+    capturedChord = std::move(heldChord);
+    heldChord = {};
+    capturing.store(false);
   }
   return true;
 }
 void __stdcall MenuEvent(SkyBuild::UI::Native::Model::EventType event) {
   if (event == SkyBuild::UI::Native::Model::kCloseMenu) {
     capturing.store(false);
-    capturedCode.store(0);
-    heldCode.store(0);
+    std::scoped_lock lock(captureMutex);
+    capturedChord = {};
+    heldChord = {};
+    captureHeldKeys.clear();
   }
   if (event == SkyBuild::UI::Native::Model::kOpenMenu ||
       event == SkyBuild::UI::Native::Model::kCloseMenu) {
@@ -282,12 +296,18 @@ void Apply(const Values &values) {
   Terrain::SetStrengthPerSecond(values.terrainStrengthPerSecond);
   Navmesh::Diagnostics::SetEnabled(false);
   using namespace ControlBindings;
-  const auto set = [](Binding &binding, std::uint32_t code,
-                      std::uint32_t padCode) {
-    const auto *key = FindKey(code);
-    const auto *pad = FindKey(padCode);
-    binding =
-        MakeBinding(code, key ? key->icon : "", padCode, pad ? pad->icon : "");
+  const auto iconFor = [](const InputChord &chord) {
+    std::string icon;
+    for (auto code : chord.keys) {
+      if (!icon.empty()) icon += "|";
+      const auto *key = FindKey(code);
+      icon += key ? key->icon : "";
+    }
+    return icon;
+  };
+  const auto set = [&](Binding &binding, const InputChord &code,
+                       const InputChord &padCode) {
+    binding = {{code, iconFor(code)}, {padCode, iconFor(padCode)}};
   };
   const auto &pad = values.gamepad;
   set(openMenu, values.menuKey, pad.menuKey);
@@ -310,6 +330,7 @@ void Apply(const Values &values) {
   set(historyRedo, values.historyBindings[1], pad.historyBindings[1]);
   set(brushIncrease, values.brushBindings[0], pad.brushBindings[0]);
   set(brushDecrease, values.brushBindings[1], pad.brushBindings[1]);
+  ++ControlBindings::revision;
   PlacementPreview::SetOpacity(values.previewOpacity);
   PlacementPreview::SetTint(
       {values.previewTint[0], values.previewTint[1], values.previewTint[2]});
@@ -349,7 +370,7 @@ void ReadBindings(const nlohmann::json &json, Bindings &b) {
   array("buildingBindings", b.bindings);
   array("fineCompletionBindings", b.fineCompletionBindings);
   if (json.contains("fineBindings") && json.at("fineBindings").size() == 12) {
-    auto fine = json.at("fineBindings").get<std::vector<std::uint32_t>>();
+    auto fine = json.at("fineBindings").get<std::vector<InputChord>>();
     fine.insert(fine.begin() + 10, 2, 0);
     const auto roll = std::array{b.fineBindings[10], b.fineBindings[11]};
     std::copy(fine.begin(), fine.end(), b.fineBindings.begin());
@@ -426,13 +447,19 @@ void CommitChanges(bool changed) {
 void __stdcall RenderKeybinds() {
   bool changed = false;
   bool openRebind = false;
-  const auto captured = capturedCode.exchange(0);
+  InputChord captured;
+  {
+    std::scoped_lock lock(captureMutex);
+    std::swap(captured, capturedChord);
+  }
   if (captured && captureAction >= 0) {
     if (captured == 1)
       status = "Rebinding cancelled.";
-    else if ((captured >= 266 && captured < 282) != captureGamepad.load())
+    else if (std::ranges::any_of(captured.keys, [](auto key) {
+      return (key >= 266 && key < 282) != captureGamepad.load();
+    }))
       status = "Use a control from the selected column.";
-    else if (!KnownBinding(captured))
+    else if (!std::ranges::all_of(captured.keys, KnownBinding))
       status = "That key is not supported.";
     else {
       auto &bindings =
@@ -453,11 +480,15 @@ void __stdcall RenderKeybinds() {
     captureAction = -1;
   Fields::Keybinds(
       draft,
-      [](std::uint32_t code) {
-        const auto *key = FindKey(code);
-        return std::string(code == 0 ? "Unbound"
-                           : key     ? key->label
-                                     : "Unknown");
+      [](const InputChord &chord) {
+        if (!chord) return std::string("Unbound");
+        std::string label;
+        for (auto code : chord.keys) {
+          if (!label.empty()) label += " then ";
+          const auto *key = FindKey(code);
+          label += key ? key->label : "Unknown";
+        }
+        return label;
       },
       [&](int action, bool gamepad) {
         if (action <= -2) {
@@ -469,14 +500,21 @@ void __stdcall RenderKeybinds() {
         }
         captureAction = action;
         captureGamepad = gamepad;
-        capturedCode.store(0);
-        heldCode.store(0);
+        std::scoped_lock lock(captureMutex);
+        capturedChord = {};
+        heldChord = {};
+        captureHeldKeys.clear();
         capturing.store(true);
         openRebind = true;
       },
-      [](std::uint32_t code) -> std::string_view {
-        const auto *key = FindKey(code);
-        return key ? key->icon : "";
+      [](const InputChord &chord) {
+        std::string icon;
+        for (auto code : chord.keys) {
+          if (!icon.empty()) icon += "|";
+          const auto *key = FindKey(code);
+          icon += key ? key->icon : "";
+        }
+        return icon;
       });
   // Open the popup outside the table's ID scope so its capture modal
   // retains the same identity as the BeginPopupModal call below.
@@ -487,16 +525,17 @@ void __stdcall RenderKeybinds() {
   if (ImGui::BeginPopupModal("Rebind control", nullptr,
                              ImGui::ImGuiWindowFlags_AlwaysAutoResize)) {
     if (capturing.load()) {
-      ImGui::TextUnformatted(
-          captureGamepad
-              ? "Press and release a gamepad button. Escape cancels."
-              : "Press a key, mouse button, or scroll direction. Escape cancels.");
-      if (captureGamepad.load()) {
-        const auto *key = FindKey(heldCode.load());
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 480.F);
-        ImGui::TextWrapped("%s", key ? key->label : "Waiting for input...");
-        ImGui::PopTextWrapPos();
+      ImGui::TextUnformatted("Press one button, or hold it and press a second. Release to confirm. Escape cancels.");
+      std::scoped_lock lock(captureMutex);
+      std::string label;
+      for (auto code : heldChord.keys) {
+        if (!label.empty()) label += " then ";
+        const auto *key = FindKey(code);
+        label += key ? key->label : "Unknown";
       }
+      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 480.F);
+      ImGui::TextUnformatted(label.empty() ? "Waiting for input..." : label.c_str());
+      ImGui::PopTextWrapPos();
     } else {
       ImGui::CloseCurrentPopup();
     }
@@ -733,8 +772,8 @@ void ShowIconGenerationProgress(bool autoClose) {
     progressWindow->IsOpen.store(true);
 }
 bool CaptureInput(RE::InputEvent *const *events) {
-  if (!events ||
-      (!capturing.load() && heldCode.load() == 0 && capturedCode.load() == 0))
+  std::scoped_lock lock(captureMutex);
+  if (!events || (!capturing.load() && !capturedChord))
     return false;
   // Shield the entire batch, including Escape and the framework toggle key.
   // Keep shielding until the render callback acknowledges the released key.

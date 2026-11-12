@@ -1,11 +1,10 @@
-#include "building/preview/DiffusePreview.h"
+#include "rendering/WorldFrame.h"
 #include "ui/imgui/NativeUI.h"
 #include "ui/imgui/InputOwnership.h"
 #include "building/BuildingMode.h"
 #include "building/ControlBindings.h"
 #include "terrain/TerrainTool.h"
 #include "terrain/brush-overlay/BrushOverlayTrace.h"
-#include "terrain/brush-overlay/BrushOverlay.h"
 #include "ui/fine-adjustments/FineAdjustments.h"
 #include "ui/imgui/UI.h"
 #include "ui/imgui/Widgets.h"
@@ -52,7 +51,7 @@ struct RegistryLifetime {
 } registryLifetime;
 HWND hwnd{};
 WNDPROC originalWndProc{};
-REL::Relocation<void(std::uint32_t)> originalRender;
+REL::Relocation<std::int64_t(std::int64_t)> originalWorldUI, originalMenuUI;
 enum class InputKind { Key, Mouse, Wheel, Character, Motion, Gamepad, Stick };
 struct Input {
   InputKind kind;
@@ -145,7 +144,10 @@ bool InitializeRenderer() {
   hwnd = desc.OutputWindow;
   originalWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
       hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WindowProc)));
-  cursor = {desc.BufferDesc.Width * .5F, desc.BufferDesc.Height * .5F};
+  RECT client{};
+  GetClientRect(hwnd, &client);
+  cursor = {(client.right - client.left) * .5F,
+            (client.bottom - client.top) * .5F};
   if (!originalWndProc) {
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -173,7 +175,6 @@ void DrainInput(bool interactive) {
   auto &io = ImGui::GetIO();
   if (clearInput.exchange(false)) {
     io.ClearInputKeys();
-    io.ClearInputCharacters();
     pending.clear();
     modifiers.fill(false);
     gamepadCursor = {};
@@ -287,8 +288,7 @@ void DrawSettings(const std::vector<Section> &pages) {
     mainWindow.IsOpen.store(false);
 }
 
-void Render(std::uint32_t argument) {
-  originalRender(argument);
+void Render() {
   const bool firstFrame = !ready.load();
   const auto startup = firstFrame ? std::chrono::steady_clock::now()
                                   : std::chrono::steady_clock::time_point{};
@@ -333,8 +333,38 @@ void Render(std::uint32_t argument) {
       UI::RefreshPresentation();
     });
   }
+  auto &data = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
+  auto *immediate = reinterpret_cast<ID3D11DeviceContext *>(data.context);
+  ComPtr<ID3D11RenderTargetView> output;
+  ComPtr<ID3D11DepthStencilView> depth;
+  immediate->OMGetRenderTargets(1, &output, &depth);
+  auto *target = output.Get();
+  if (!target)
+    return;
+  ComPtr<ID3D11Resource> resource;
+  ComPtr<ID3D11Texture2D> texture;
+  target->GetResource(&resource);
+  if (!resource || FAILED(resource.As(&texture)))
+    return;
+  D3D11_TEXTURE2D_DESC targetDesc{};
+  texture->GetDesc(&targetDesc);
+  D3D11_RENDER_TARGET_VIEW_DESC viewDesc{};
+  target->GetDesc(&viewDesc);
+  const UINT mip = viewDesc.ViewDimension == D3D11_RTV_DIMENSION_TEXTURE2D
+                       ? viewDesc.Texture2D.MipSlice
+                       : 0;
+  const auto width = std::max(1U, targetDesc.Width >> mip);
+  const auto height = std::max(1U, targetDesc.Height >> mip);
   ImGui_ImplDX11_NewFrame();
   ImGui_ImplWin32_NewFrame();
+  auto &io = ImGui::GetIO();
+  if (io.DisplaySize.x <= 0.F || io.DisplaySize.y <= 0.F)
+    return;
+  // Layout and input use client coordinates; rasterization uses target pixels.
+  io.DisplayFramebufferScale = {width / io.DisplaySize.x,
+                                height / io.DisplaySize.y};
+  cursor.x = std::clamp(cursor.x, 0.F, io.DisplaySize.x);
+  cursor.y = std::clamp(cursor.y, 0.F, io.DisplaySize.y);
   DrainInput(interactive || UI::WheelHasCursor());
   Widgets::PrepareGamepadNavigation();
   ImGui::NewFrame();
@@ -349,25 +379,10 @@ void Render(std::uint32_t argument) {
     if (window->state.IsOpen.load())
       window->draw();
   ImGui::Render();
-  // Use Skyrim's current swap-chain view without retaining the backbuffer
-  // across a resize. The standard DX11 backend restores its other pipeline
-  // bindings.
-  auto &data = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
-  auto *immediate = reinterpret_cast<ID3D11DeviceContext *>(data.context);
-  auto *target = reinterpret_cast<ID3D11RenderTargetView *>(
-      data.renderWindows[0].renderView);
-  SkyBuild::DiffusePreview::Render();
-  Terrain::BrushOverlay::Render();
-  Terrain::BrushOverlay::Trace::FrameBoundary();
-  if (target) {
-    ComPtr<ID3D11RenderTargetView> oldTarget;
-    ComPtr<ID3D11DepthStencilView> oldDepth;
-    immediate->OMGetRenderTargets(1, &oldTarget, &oldDepth);
-    immediate->OMSetRenderTargets(1, &target, nullptr);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-    auto *old = oldTarget.Get();
-    immediate->OMSetRenderTargets(1, &old, oldDepth.Get());
-  }
+  // Keep the native interface's output, including HDR's redirected UI buffer.
+  immediate->OMSetRenderTargets(1, &target, nullptr);
+  ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+  immediate->OMSetRenderTargets(1, &target, depth.Get());
   if (firstFrame) {
     spdlog::info("Native UI initialization and first draw: {:.2f} ms CPU.",
                  std::chrono::duration<double, std::milli>(
@@ -375,16 +390,40 @@ void Render(std::uint32_t argument) {
                      .count());
   }
 }
+std::int64_t CompleteWorldUI(std::int64_t manager) {
+  const auto result = originalWorldUI(manager);
+  Render();
+  return result;
+}
+std::int64_t CompleteMenuUI(std::int64_t manager) {
+  const auto result = originalMenuUI(manager);
+  Render();
+  return result;
+}
 } // namespace
 
 bool Install() {
-  const auto call = REL::RelocationID(75461, 77246).address() + 0x9;
-  if (*reinterpret_cast<const std::uint8_t *>(call) != 0xE8) {
-    spdlog::critical(
-        "SkyBuild renderer rejected an unexpected render hook instruction.");
+  if (!SkyBuild::Rendering::WorldFrame::Install())
+    spdlog::error("World-space previews have no world completion hook.");
+  const auto version = REL::Module::get().version();
+  const bool se = REL::Module::IsSE();
+  if (REL::Module::IsVR() ||
+      (version != REL::Version(1, 5, 97, 0) &&
+       version != REL::Version(1, 6, 1170, 0) &&
+       version != REL::Version(1, 7, 104, 0)))
+    return false;
+  const auto world = REL::RelocationID(35556, 36555).address() +
+                     (se ? 0x3AB : 0x371);
+  const auto menu = REL::RelocationID(38085, 39039).address() +
+                    (version == REL::Version(1, 7, 104, 0) ? 0x1A0 : 0x19A);
+  if (*reinterpret_cast<const std::uint8_t *>(world) != 0xE8 ||
+      *reinterpret_cast<const std::uint8_t *>(menu) != 0xE8) {
+    spdlog::critical("SkyBuild rejected unexpected native UI completion calls.");
     return false;
   }
-  originalRender = SKSE::GetTrampoline().write_call<5>(call, Render);
+  auto &trampoline = SKSE::GetTrampoline();
+  originalWorldUI = trampoline.write_call<5>(world, CompleteWorldUI);
+  originalMenuUI = trampoline.write_call<5>(menu, CompleteMenuUI);
   return true;
 }
 void RegisterMenu() {
@@ -420,46 +459,6 @@ bool CaptureInputEvent(RE::InputEvent *event) {
         return consume;
       }
       const auto slot = ControlBindings::InputCode(*button);
-      if (!UI::FineAdjustments::IsOpen() &&
-          ControlBindings::Matches(*button, ControlBindings::openMenu) &&
-          BuildingMode::IsHammerReady() && !blockingWindow &&
-          !UI::IsGameMenuBlocking()) {
-        if (button->IsDown())
-          UI::OpenMainMenu();
-        else if (button->IsUp())
-          UI::FinishToolWheel();
-        consume = true;
-      }
-      if (UI::IsToolWheelOpen() && !blockingWindow &&
-          BuildingMode::IsHammerReady()) {
-        const auto matches = [&](const auto &binding) {
-          return ControlBindings::Matches(*button, binding);
-        };
-        const bool pad = button->GetDevice() == RE::INPUT_DEVICE::kGamepad;
-        const bool confirm = pad ? slot == 276 : matches(ControlBindings::placeAction);
-        const bool cancel = pad ? slot == 277 : matches(ControlBindings::secondaryAction);
-        if (confirm || cancel) {
-          if (button->IsDown()) {
-            SKSE::GetTaskInterface()->AddTask([cancel] {
-              if (cancel)
-                UI::CancelToolWheel();
-              else
-                UI::FinishToolWheel(true);
-            });
-          }
-          consume = true;
-        }
-      }
-      const auto &toolBinding = ControlBindings::switchMode;
-      if (UI::IsToolWheelOpen() &&
-          ControlBindings::Matches(*button, toolBinding) && !blockingWindow &&
-          BuildingMode::IsHammerReady()) {
-        if (button->IsDown())
-          UI::OpenToolWheel();
-        else if (button->IsUp())
-          UI::FinishToolWheel();
-        consume = true;
-      }
       consume = inputOwnership.Consume(slot, button->IsDown(), button->IsUp(),
                                        consume);
       if (!consume)

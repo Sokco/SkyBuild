@@ -5,7 +5,7 @@ set(PLUGIN_AUTHOR "Sokco816")
 
 project(
     ${PLUGIN_NAME}
-    VERSION 0.0.2
+    VERSION 0.0.3
     LANGUAGES CXX
 )
 

@@ -1,4 +1,5 @@
 #pragma once
+namespace SkyBuild::Rendering { class OverlayBackend; }
 #include <d3d11.h>
 #include <wrl/client.h>
 
@@ -28,5 +29,5 @@ struct Instance {
 std::shared_ptr<const Model> Load(RE::TESBoundObject *base);
 void Publish(const void *owner, const Instance &instance);
 void Remove(const void *owner);
-void Render(); // Called from the existing render hook, before FrameBoundary.
+void Render(Rendering::OverlayBackend &backend);
 } // namespace SkyBuild::DiffusePreview

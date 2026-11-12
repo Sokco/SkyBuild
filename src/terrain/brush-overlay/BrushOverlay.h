@@ -1,4 +1,5 @@
 #pragma once
+namespace SkyBuild::Rendering { class OverlayBackend; }
 #include "terrain/TerrainVolume.h"
 #include "terrain/brush-overlay/BrushOverlayTraceState.h"
 #include <span>
@@ -10,6 +11,5 @@ void ExpectChunk(std::uint64_t key);
 void AddOriginal(RE::NiAVObject *root);
 void Publish();
 void Clear();
-// Runs in the existing late render hook, before ImGui. No extra hooks.
-void Render();
+void Render(Rendering::OverlayBackend &backend);
 } // namespace SkyBuild::Terrain::BrushOverlay

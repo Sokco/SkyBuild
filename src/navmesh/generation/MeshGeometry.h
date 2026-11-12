@@ -59,6 +59,49 @@ inline Polygon Clip(const Polygon &polygon, int axis, float boundary,
   }
   return output;
 }
+// Keep intermediate intersections precise across all four clipping planes.
+// Rounding after each plane can move a shallow shared edge onto different seams.
+inline Polygon ClipToBounds(const Polygon &polygon,
+                            const BuildInput::Bounds &bounds) {
+  using Vertex = std::array<double, 3>;
+  std::vector<Vertex> points;
+  for (const auto p : polygon)
+    points.push_back({p.x, p.y, p.z});
+  const std::array<std::tuple<int, double, bool>, 4> planes{{
+      {0, bounds.left, true}, {0, bounds.right, false},
+      {1, bounds.bottom, true}, {1, bounds.top, false}}};
+  for (const auto &[axis, boundary, positive] : planes) {
+    if (points.empty())
+      break;
+    std::vector<Vertex> clipped;
+    auto previous = points.back();
+    bool prior = positive ? previous[axis] >= boundary : previous[axis] <= boundary;
+    for (const auto current : points) {
+      const bool inside =
+          positive ? current[axis] >= boundary : current[axis] <= boundary;
+      if (inside != prior) {
+        const double t = (boundary - previous[axis]) /
+                         (current[axis] - previous[axis]);
+        Vertex intersection;
+        for (unsigned component = 0; component < 3; ++component)
+          intersection[component] = previous[component] +
+              (current[component] - previous[component]) * t;
+        intersection[axis] = boundary;
+        clipped.push_back(intersection);
+      }
+      if (inside)
+        clipped.push_back(current);
+      previous = current;
+      prior = inside;
+    }
+    points = std::move(clipped);
+  }
+  Polygon result;
+  for (const auto &p : points)
+    result.push_back({static_cast<float>(p[0]), static_cast<float>(p[1]),
+                      static_cast<float>(p[2])});
+  return result;
+}
 // Remove only the sampled rectangle; interpolation retains the original surface
 // height outside it. The input baseline and its topology are never edited.
 inline std::vector<Polygon>

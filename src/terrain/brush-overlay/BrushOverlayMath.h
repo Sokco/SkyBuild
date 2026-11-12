@@ -32,16 +32,6 @@ inline std::optional<bool> ReversedDepth(const float projection[4][4],
     return {};
   return distantDepth < closeDepth;
 }
-// NiCamera's CPU projection is forward-Z. Adapt only its Z row when the
-// active rendering projection reports reversed depth; XY/W remain unchanged.
-inline void SceneDepthProjection(const float camera[4][4], float scene[4][4],
-                                 bool reversed) {
-  for (int row = 0; row < 4; ++row)
-    for (int column = 0; column < 4; ++column)
-      scene[row][column] = reversed && row == 2
-                               ? camera[3][column] - camera[2][column]
-                               : camera[row][column];
-}
 inline bool Intersects(const std::array<Vec, 3> &triangle, const Brush &brush) {
   // Conservative sphere/AABB rejection; the pixel shader does the exact mask.
   auto lo = triangle[0], hi = lo;

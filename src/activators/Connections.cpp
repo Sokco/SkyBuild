@@ -837,7 +837,7 @@ bool HasTarget() {
   const auto frame = wire.load();
   return frame && frame->valid;
 }
-bool HandleButton(RE::ButtonEvent *button) {
+bool HandleButton(const ControlBindings::Event *button) {
   using namespace ControlBindings;
   const auto match = [&](const auto &binding) {
     return ControlBindings::Matches(*button, binding);

@@ -1,4 +1,5 @@
 #pragma once
+namespace SkyBuild::ControlBindings { struct Event; }
 
 namespace SkyBuild::Terrain {
 constexpr std::uint32_t SaveRecord = 0x4E525254; // TRRN
@@ -13,7 +14,7 @@ void Initialize();
 void SetStrengthPerSecond(float strength);
 void SetSceneLoaded(bool loaded);
 void Update(RE::PlayerCharacter *player);
-bool HandleButton(RE::ButtonEvent *button);
+bool HandleButton(const ControlBindings::Event *button);
 bool Ready();
 bool Enabled();
 void SetEnabled(bool enabled);

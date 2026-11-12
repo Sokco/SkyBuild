@@ -240,7 +240,7 @@ void Update() {
   CaptureMovementAxes();
   Present();
 }
-bool HandleButton(RE::ButtonEvent *button) {
+bool HandleButton(const ControlBindings::Event *button) {
   if (!open || !button)
     return false;
   const auto matches = [button](const auto &binding) {
@@ -267,14 +267,6 @@ bool HandleButton(RE::ButtonEvent *button) {
       return true;
     }
   }
-  // Consume other SkyBuild actions without changing the selected item/tool.
-  using namespace ControlBindings;
-  for (const auto *b :
-       {&fineAdjustments, &rotate, &placeAction, &switchMode, &toggleSnapping,
-        &packPrevious, &packNext, &categoryLeft, &categoryRight, &scrollLeft,
-        &scrollRight})
-    if (ControlBindings::Matches(*button, *b))
-      return true;
   return false;
 }
 bool IsOpen() { return open; }

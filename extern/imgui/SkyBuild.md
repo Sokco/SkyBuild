@@ -1,6 +1,6 @@
 # Private Dear ImGui build
 
-Pinned source: https://github.com/ocornut/imgui/tree/v1.91.9b (MIT).
+Pinned source: https://github.com/ocornut/imgui/tree/v1.92.5 (MIT).
 
 SkyBuild statically links its own context, Win32 backend, DX11 backend and ImAnim.
 It does not load, call or share an ImGui context with SKSE Menu Framework.

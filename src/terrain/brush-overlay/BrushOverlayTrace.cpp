@@ -19,10 +19,8 @@ using DrawFn = void(STDMETHODCALLTYPE *)(ID3D11DeviceContext *, UINT, UINT,
 DrawFn original{};
 ID3D11DeviceContext *immediate{}; // Borrowed engine identity, never owns it.
 std::atomic_bool capturing{};
-std::atomic_bool sceneCapturing{};
 std::mutex gate;
 FrameDraws<TerrainSurface> sceneSurfaces;
-SceneFrameSnapshot sceneFrame;
 constexpr GUID payloadID{0x647c52fe,
                          0xb717,
                          0x4776,
@@ -55,30 +53,6 @@ struct Payload final : IUnknown {
 };
 void STDMETHODCALLTYPE Draw(ID3D11DeviceContext *context, UINT indices,
                             UINT start, INT base) {
-  // Object previews also need the scene's pre-postprocess camera matrices,
-  // including in interiors with no terrain. Stop inspecting draws once copied.
-  if (sceneCapturing.load(std::memory_order_relaxed) && context == immediate &&
-      !sceneFrame.Captured()) {
-    ComPtr<ID3D11DepthStencilView> dsv;
-    ComPtr<ID3D11RenderTargetView> target;
-    ComPtr<ID3D11PixelShader> pixel;
-    context->OMGetRenderTargets(1, &target, &dsv);
-    if (dsv && target) {
-      context->PSGetShader(&pixel, nullptr, nullptr);
-      ComPtr<ID3D11Resource> depth;
-      dsv->GetResource(&depth);
-      auto *graphics = RE::BSGraphics::Renderer::GetSingleton();
-      const auto &data = graphics->GetDepthStencilData();
-      bool scene = false;
-      for (auto index : {RE::RENDER_TARGET_DEPTHSTENCIL::kMAIN,
-                         RE::RENDER_TARGET_DEPTHSTENCIL::kMAIN_COPY,
-                         RE::RENDER_TARGET_DEPTHSTENCIL::kPOST_ZPREPASS_COPY})
-        scene |= depth.Get() == reinterpret_cast<ID3D11Resource *>(
-                                    data.depthStencils[index].texture);
-      if (scene && pixel)
-        sceneFrame.Capture(context);
-    }
-  }
   if (capturing.load(std::memory_order_relaxed) && context == immediate &&
       Terrain::Ready()) {
     ComPtr<ID3D11Buffer> buffer;
@@ -112,17 +86,6 @@ void STDMETHODCALLTYPE Draw(ID3D11DeviceContext *context, UINT indices,
               payload->stamp.revision != stamp.revision) {
             original(context, indices, start, base);
             return;
-          }
-          // A depth-only prepass may leave unrelated pixel constants bound.
-          // Capture only a draw with a pixel shader and a color output.
-          if (!sceneFrame.Captured()) {
-            ComPtr<ID3D11PixelShader> pixelShader;
-            ComPtr<ID3D11RenderTargetView> colorTarget;
-            context->PSGetShader(&pixelShader, nullptr, nullptr);
-            context->OMGetRenderTargets(1, &colorTarget, nullptr);
-            if (pixelShader && colorTarget) {
-              sceneFrame.Capture(context);
-            }
           }
           std::scoped_lock lock(gate);
           sceneSurfaces.Record(stamp, payload->surface);
@@ -170,15 +133,12 @@ void Tag(ID3D11Buffer *buffer, Stamp stamp,
 }
 
 void Capture(bool enabled) { capturing.store(enabled); }
-void CaptureScene(bool enabled) { sceneCapturing.store(enabled); }
-SceneFrameBinding SceneFrame() { return sceneFrame.Current(); }
 std::vector<DrawnPayload<TerrainSurface>>
 Select(std::span<const std::uint64_t> keys) {
   std::scoped_lock lock(gate);
   return sceneSurfaces.Select(keys);
 }
 void FrameBoundary() {
-  sceneFrame.FrameBoundary();
   std::scoped_lock lock(gate);
   sceneSurfaces.Clear();
 }

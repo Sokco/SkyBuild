@@ -62,6 +62,7 @@ template <class Render> void Rows(std::size_t count, Render render) {
 }
 float KeyWidth(std::string_view icon);
 void Key(std::string_view icon, std::string_view label);
+void DrawKey(std::string_view icon, std::string_view label, ImGui::ImVec2 position);
 void Picture(const std::filesystem::path &path, float size, float opacity = 1.F,
              float brightness = 1.F);
 bool Panel(const char *name, ImGui::ImVec2 position, ImGui::ImVec2 size,

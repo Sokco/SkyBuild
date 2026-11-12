@@ -381,22 +381,35 @@ float IconWidth(ImGui::ImVec2 dimensions) {
   return dimensions.y > 0 ? 30.F * dimensions.x / dimensions.y : 30.F;
 }
 } // namespace
+namespace {
+float ChordGap(std::string_view first, std::string_view second) {
+  ImGui::ImVec2 dimensions;
+  return 3.F - (KeyTexture(first, dimensions) ? 9.F : 0.F)
+             - (KeyTexture(second, dimensions) ? 9.F : 0.F);
+}
+}
 float KeyWidth(std::string_view icon) {
+  if (const auto split = icon.find('|'); split != std::string_view::npos)
+    return KeyWidth(icon.substr(0, split)) +
+           ChordGap(icon.substr(0, split), icon.substr(split + 1)) +
+           KeyWidth(icon.substr(split + 1));
   ImGui::ImVec2 dimensions;
   return KeyTexture(icon, dimensions) ? IconWidth(dimensions) + 18.F : 48.F;
 }
-void Key(std::string_view icon, std::string_view label) {
+void DrawKey(std::string_view icon, std::string_view label, ImGui::ImVec2 position) {
+  if (const auto split = icon.find('|'); split != std::string_view::npos) {
+    const auto first = icon.substr(0, split);
+    DrawKey(first, {}, position);
+    const auto second = icon.substr(split + 1);
+    const auto x = position.x + KeyWidth(first) + ChordGap(first, second);
+    DrawKey(second, label, {x, position.y});
+    return;
+  }
   ImGui::ImVec2 dimensions;
   const auto texture = KeyTexture(icon, dimensions);
   const float imageWidth = IconWidth(dimensions);
   const float width = texture ? imageWidth + 18.F : 48.F;
   const float labelX = width + 10.F;
-  const auto position = ImGui::GetCursorScreenPos();
-  const std::string layoutLabel(label);
-  ImGui::Dummy({label.empty()
-                    ? width
-                    : labelX + ImGui::CalcTextSize(layoutLabel.c_str()).x,
-                30});
   auto *draw = ImGui::GetWindowDrawList();
   const auto color =
       0x00FFFFFFU |
@@ -448,6 +461,15 @@ void Key(std::string_view icon, std::string_view label) {
         draw, {position.x + labelX, position.y + (30 - size.y) * .5F}, color,
         text.c_str());
   }
+}
+void Key(std::string_view icon, std::string_view label) {
+  const auto position = ImGui::GetCursorScreenPos();
+  const auto width = KeyWidth(icon);
+  const std::string text(label);
+  ImGui::Dummy({label.empty() ? width
+                             : width + 10.F + ImGui::CalcTextSize(text.c_str()).x,
+                30});
+  DrawKey(icon, label, position);
 }
 void Picture(const std::filesystem::path &path, float size, float opacity,
              float brightness) {

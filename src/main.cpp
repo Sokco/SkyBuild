@@ -55,6 +55,7 @@ void MessageHandler(SKSE::MessagingInterface::Message *a_message) {
   case SKSE::MessagingInterface::kNewGame:
     SkyBuild::UI::Native::ResetInput();
     SkyBuild::BuildingManager::RefreshPackSettings();
+    SkyBuild::Containers::Restore();
     SkyBuild::MapMarkers::Restore();
     SkyBuild::BuildingMode::SetSceneLoaded(true);
     SkyBuild::Terrain::SetSceneLoaded(true);
@@ -106,8 +107,8 @@ SKSEPluginLoad(const SKSE::LoadInterface *a_skse) {
   }
 
   // CommonLib initializes this shared pool only once. Reserve the UI, input
-  // and terrain recovery call stubs up front; later calls cannot grow it.
-  SKSE::AllocTrampoline((2 + 1) * 14);
+  // world capture and terrain recovery stubs up front; later calls cannot grow it.
+  SKSE::AllocTrampoline((4 + 1) * 14);
   const auto papyrus = SKSE::GetPapyrusInterface();
   if (!papyrus || !papyrus->Register(SkyBuild::Containers::RegisterPapyrus)) {
     spdlog::critical("Failed to register SkyBuild container functions.");

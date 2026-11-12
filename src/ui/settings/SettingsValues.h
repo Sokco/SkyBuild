@@ -1,5 +1,6 @@
 #pragma once
 #include "terrain/TerrainTiming.h"
+#include "building/InputChord.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -8,17 +9,17 @@
 namespace SkyBuild::Settings {
 inline constexpr std::uint32_t MenuToggleKey = 48; // B: main wheel.
 struct Bindings {
-  std::uint32_t menuKey{MenuToggleKey};
-  std::uint32_t secondaryBinding{257};
-  std::array<std::uint32_t, 2> fineCompletionBindings{256, 257};
-  std::uint32_t counterclockwiseBinding{};              // Zero means unbound.
-  std::array<std::uint32_t, 2> modifyBindings{46, 18};  // Copy, properties.
-  std::array<std::uint32_t, 2> historyBindings{44, 45}; // Undo / redo.
-  std::array<std::uint32_t, 2> brushBindings{
+  InputChord menuKey{MenuToggleKey};
+  InputChord secondaryBinding{257};
+  std::array<InputChord, 2> fineCompletionBindings{256, 257};
+  InputChord counterclockwiseBinding{42, 19};     // Left Shift + R.
+  std::array<InputChord, 2> modifyBindings{46, 18};  // Copy, properties.
+  std::array<InputChord, 2> historyBindings{44, 45}; // Undo / redo.
+  std::array<InputChord, 2> brushBindings{
       264, 265}; // Increase / decrease radius.
-  std::array<std::uint32_t, 11> bindings{265, 264, 16,  18, 46, 47,
+  std::array<InputChord, 11> bindings{265, 264, 16,  18, 46, 47,
                                          19,  256, 258, 20, 33};
-  std::array<std::uint32_t, 14> fineBindings{203, 205, 200, 208, 201, 209, 36,
+  std::array<InputChord, 14> fineBindings{203, 205, 200, 208, 201, 209, 36,
                                              38,  23,  37,  22,  24,  12,  13};
 };
 inline Bindings GamepadDefaults() {
@@ -70,10 +71,10 @@ template <class T> inline auto &BindingAt(T &bindings, int action) {
   return bindings.bindings.at(action);
 }
 enum BindingScope : unsigned {
-  ScopeBuild = 1, ScopeModify = 2, ScopeMove = 4, ScopeFine = 8, ScopeTerrain = 16, ScopePicker = 32, ScopeIdle = 64
+  ScopeBuild = 1, ScopeModify = 2, ScopeMove = 4, ScopeFine = 8, ScopeTerrain = 16, ScopePicker = 32, ScopeIdle = 64, ScopeWheel = 128
 };
 inline unsigned BindingScopes(int action) {
-  constexpr unsigned all = ScopeBuild | ScopeModify | ScopeMove | ScopeFine | ScopeTerrain | ScopePicker | ScopeIdle;
+  constexpr unsigned all = ScopeBuild | ScopeModify | ScopeMove | ScopeFine | ScopeTerrain | ScopePicker | ScopeIdle | ScopeWheel;
   if (action >= FineCompletionBindingOffset) return ScopeFine;
   if (action == MenuBindingAction || action == 8) return all & ~ScopeFine;
   if (action == 7 || action == SecondaryBindingAction) return all & ~(ScopeIdle | ScopeFine);
@@ -91,9 +92,16 @@ bool ValidateBindings(const Bindings &values, KnownKey known) {
   for (int i = 0; i < BindingCount; ++i) {
     const auto code = BindingAt(values, i);
     if (!code) continue;
-    if (!known(code) || code == 1) return false;
-    if ((code == 264 || code == 265) && i != 0 && i != 1 &&
-        i != BrushBindingOffset && i != BrushBindingOffset + 1) return false;
+    if (code.keys.size() > 2) return false;
+    for (std::size_t k = 0; k < code.keys.size(); ++k) {
+      const auto key = code.keys[k];
+      if (!known(key) || key == 0 || key == 1) return false;
+      if (std::find(code.keys.begin(), code.keys.begin() + k, key) != code.keys.begin() + k)
+        return false;
+      if ((key == 264 || key == 265) &&
+          (k + 1 != code.keys.size() || (i != 0 && i != 1 &&
+           i != BrushBindingOffset && i != BrushBindingOffset + 1))) return false;
+    }
     for (int j = 0; j < i; ++j)
       if (code == BindingAt(values, j) && (BindingScopes(i) & BindingScopes(j)))
         return false;
@@ -101,7 +109,7 @@ bool ValidateBindings(const Bindings &values, KnownKey known) {
   return true;
 }
 // A new assignment only displaces controls that can run in the same scope.
-inline void AssignBinding(Bindings &values, int action, std::uint32_t code) {
+inline void AssignBinding(Bindings &values, int action, const InputChord &code) {
   if (code)
     for (int i = 0; i < BindingCount; ++i)
       if (i != action && BindingAt(values, i) == code &&

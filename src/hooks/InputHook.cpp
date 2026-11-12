@@ -15,6 +15,7 @@
 #include "ui/imgui/NativeUI.h"
 #include "ui/imgui/UI.h"
 #include "ui/settings/Settings.h"
+#include "ui/settings/SettingsValues.h"
 #include "ui/pack-editor/PackEditor.h"
 
 namespace SkyBuild::Hooks {
@@ -23,18 +24,20 @@ using DispatchInput = void (*)(RE::BSTEventSource<RE::InputEvent *> *,
                                RE::InputEvent *const *);
 REL::Relocation<DispatchInput> originalDispatch;
 bool ConsumeToolEvent(RE::InputEvent *event);
+unsigned UpdateBindingScope(bool rebinding);
 UI::InputDelivery delivery;
 void Dispatch(RE::BSTEventSource<RE::InputEvent *> *source,
               RE::InputEvent *const *events) {
   const bool wasGamepad = ControlBindings::gamepadInUse.load();
   const bool rebinding = Settings::CaptureInput(events);
+  UpdateBindingScope(rebinding);
   FilteredInputBatch<RE::InputEvent> filtered(
       events ? *events : nullptr, [rebinding](RE::InputEvent *event) {
         if (!rebinding)
           ControlBindings::ObserveEvent(*event);
-        const bool consume = rebinding ||
-                             UI::Native::CaptureInputEvent(event) ||
-                             ConsumeToolEvent(event);
+        const bool uiConsumed = !rebinding && UI::Native::CaptureInputEvent(event);
+        const bool toolConsumed = !rebinding && ConsumeToolEvent(event);
+        const bool consume = rebinding || toolConsumed || uiConsumed;
         const auto button = event->AsButtonEvent();
         if (!button)
           return consume;
@@ -52,7 +55,7 @@ void Dispatch(RE::BSTEventSource<RE::InputEvent *> *source,
   }
   originalDispatch(source, &filtered.head);
 }
-bool HandleButton(RE::ButtonEvent *button) {
+bool HandleButton(const ControlBindings::Event *button) {
   using namespace ControlBindings;
   const auto matches = [button](const Binding &binding) {
     return ControlBindings::Matches(*button, binding);
@@ -65,25 +68,6 @@ bool HandleButton(RE::ButtonEvent *button) {
         button->GetIDCode() == RE::BSKeyboardDevice::Key::kEscape))) {
     if (button->IsDown())
       UI::PackEditor::CancelSelection();
-    return true;
-  }
-  if (matches(switchMode)) {
-    if (button->IsDown())
-      UI::OpenToolWheel();
-    else if (button->IsUp())
-      UI::FinishToolWheel();
-    return true;
-  }
-  if (UI::IsToolWheelOpen() && !matches(switchMode)) {
-    if (matches(secondaryAction)) {
-      if (button->IsDown())
-        UI::CancelToolWheel();
-      return true;
-    }
-    if (button->GetDevice() == RE::INPUT_DEVICE::kKeyboard &&
-        button->GetIDCode() == RE::BSKeyboardDevice::Key::kEscape &&
-        button->IsDown())
-      UI::CancelToolWheel();
     return true;
   }
   if (Activators::IsConnecting())
@@ -224,10 +208,92 @@ void InputHook::Install() {
 }
 
 namespace {
-bool ConsumeToolEvent(RE::InputEvent *event) {
+using namespace ControlBindings;
+std::array<Binding *, Settings::BindingCount> RuntimeBindings() {
+  return {&scrollLeft, &scrollRight, &categoryLeft, &categoryRight,
+          &packPrevious, &packNext, &rotate, &placeAction, &switchMode,
+          &toggleSnapping, &fineAdjustments,
+          &fineControls[0], &fineControls[1], &fineControls[2], &fineControls[3],
+          &fineControls[4], &fineControls[5], &fineControls[6], &fineControls[7],
+          &fineControls[8], &fineControls[9], &fineControls[10], &fineControls[11],
+          &fineControls[12], &fineControls[13], &historyUndo, &historyRedo,
+          &openMenu, &brushIncrease, &brushDecrease, &modifyControls[0],
+          &modifyControls[1], &secondaryAction, &rotateCounterclockwise,
+          &fineConfirm, &fineCancel};
+}
+Input::ChordResolver chords;
+unsigned CurrentScope() {
+  using namespace Settings;
   if ((!BuildingMode::IsHammerReady() && !Terrain::Ready()) ||
       UI::IsGameMenuBlocking(true))
-    return false;
+    return 0;
+  if (UI::FineAdjustments::IsOpen()) return ScopeFine;
+  if (UI::IsToolWheelOpen()) return ScopeWheel;
+  if (Terrain::Ready())
+    return Terrain::GetTool() == Terrain::Tool::Idle ? ScopeIdle : ScopeTerrain;
+  if (PlacementPreview::IsMovingObject()) return ScopeMove;
+  if (BuildingMode::GetTool() == BuildingMode::InteractionMode::kPicker) return ScopePicker;
+  if (BuildingMode::GetTool() == BuildingMode::InteractionMode::kModify) return ScopeModify;
+  return BuildingMode::IsBuildMode() ? ScopeBuild : ScopeIdle;
+}
+void DispatchAction(const Input::ActionEvent &action) {
+  const auto bindings = RuntimeBindings();
+  const auto *binding = action.action < Settings::BindingCount * 2
+                            ? bindings[action.action % Settings::BindingCount]
+                            : action.action == Settings::BindingCount * 2 ? &placeAction : &secondaryAction;
+  const Event event{binding, action.terminal, action.phase, action.duration};
+  if (Matches(event, openMenu) || Matches(event, switchMode)) {
+    if (event.IsDown()) {
+      if (Terrain::Ready()) Terrain::SuspendInput();
+      if (Matches(event, openMenu)) UI::OpenMainMenu();
+      else UI::OpenToolWheel();
+    } else if (event.IsUp()) UI::FinishToolWheel();
+    return;
+  }
+  if (UI::IsToolWheelOpen()) {
+    if (event.IsDown()) {
+      if (Matches(event, secondaryAction)) UI::CancelToolWheel();
+      else if (Matches(event, placeAction)) UI::FinishToolWheel(true);
+    }
+    // A tool-menu modifier may release during a terrain stroke.
+    if (event.IsUp() && Terrain::Ready()) Terrain::SuspendInput();
+    return;
+  }
+  if (Terrain::Ready()) Terrain::HandleButton(&event);
+  else HandleButton(&event);
+}
+unsigned UpdateBindingScope(bool rebinding) {
+  static std::uint64_t appliedRevision = ~std::uint64_t{0};
+  if (const auto version = revision.load(); version != appliedRevision) {
+    if (Terrain::Ready()) Terrain::SuspendInput();
+    std::vector<Input::ChordBinding> entries;
+    const auto bindings = RuntimeBindings();
+    for (bool pad : {false, true})
+      for (int i = 0; i < Settings::BindingCount; ++i)
+        entries.push_back({(pad ? bindings[i]->gamepad : bindings[i]->keyboardMouse).chord,
+                           Settings::BindingScopes(i)});
+    // A/Cross and B/Circle also participate in modifier deferral in the wheel.
+    for (const auto key : {276U, 277U}) {
+      const bool assigned = std::ranges::any_of(entries, [&](const auto &entry) {
+        return entry.chord == key && (entry.scopes & Settings::ScopeWheel);
+      });
+      entries.push_back({key, assigned ? 0U : Settings::ScopeWheel});
+    }
+    chords.Configure(std::move(entries));
+    appliedRevision = version;
+  }
+  const auto scope = rebinding ? 0U : CurrentScope();
+  static unsigned previousScope{};
+  if (!scope && previousScope && Terrain::Ready()) Terrain::SuspendInput();
+  previousScope = scope;
+  chords.SetScope(scope, [](const Input::ActionEvent &event) {
+    // Context changes cancel holds; they must not confirm a wheel selection.
+    if (event.phase == Input::Phase::Up && Terrain::Ready()) Terrain::SuspendInput();
+  });
+  return scope;
+}
+bool ConsumeToolEvent(RE::InputEvent *event) {
+  if (!UpdateBindingScope(false)) return false;
   if (UI::IsToolWheelOpen())
     if (const auto motion = event->AsMouseMoveEvent()) {
       UI::MoveToolWheel(static_cast<float>(motion->mouseInputX),
@@ -235,19 +301,28 @@ bool ConsumeToolEvent(RE::InputEvent *event) {
       return true;
     }
   const auto button = event->AsButtonEvent();
-  if (!button)
-    return false;
+  if (!button) return false;
+  const auto code = InputCode(*button);
+  const auto phase = button->IsDown() ? Input::Phase::Down :
+                     button->IsUp() ? Input::Phase::Up : Input::Phase::Held;
+  const bool matched = chords.Process(code, phase, button->HeldDuration(), DispatchAction);
+  bool escape = false;
+  if (code == 1) {
+    const Event raw{nullptr, code, phase, button->HeldDuration()};
+    if (UI::IsToolWheelOpen()) {
+      if (button->IsDown()) UI::CancelToolWheel();
+      escape = true;
+    } else escape = Terrain::Ready() ? Terrain::HandleButton(&raw) : HandleButton(&raw);
+  }
   const auto actions = RE::UserEvents::GetSingleton();
   const auto action = button->QUserEvent();
   const bool attack = actions && (action == actions->leftAttack ||
                                   action == actions->rightAttack ||
                                   action == actions->dualAttack);
-  return (Terrain::Ready() ? Terrain::HandleButton(button)
-                           : HandleButton(button)) ||
+  return matched || escape || UI::IsToolWheelOpen() ||
          (BuildingMode::IsActive() && actions && action == actions->activate) ||
-         (attack &&
-          (Terrain::Ready() ? Terrain::GetTool() != Terrain::Tool::Idle
-                            : BuildingMode::IsActive()));
+         (attack && (Terrain::Ready() ? Terrain::GetTool() != Terrain::Tool::Idle
+                                    : BuildingMode::IsActive()));
 }
 } // namespace
 } // namespace SkyBuild::Hooks

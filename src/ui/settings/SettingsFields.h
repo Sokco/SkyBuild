@@ -31,7 +31,7 @@ inline void Keybinds(const Values &values, LabelFor labelFor, Capture capture,
       ImGuiKey_GamepadFaceLeft, ImGuiInputFlags_None, clearOwner);
   struct Row {
     const char *label;
-    std::uint32_t key;
+    InputChord key;
     int action;
   };
   std::pair<int, bool> hoveredBinding{-1, false}, focusedBinding{-1, false};
@@ -86,12 +86,13 @@ inline void Keybinds(const Values &values, LabelFor labelFor, Capture capture,
           if (ImGui::IsItemHovered())
             ImGui::SetTooltip("%s\nRight-click or X / Square to clear", labelFor(key).c_str());
           if (!icon.empty()) {
-            const auto after = ImGui::GetCursorScreenPos();
-            ImGui::SetCursorScreenPos(
+            auto *draw = ImGui::GetWindowDrawList();
+            draw->PushClipRect(position, {position.x + width, position.y + height}, true);
+            UI::Widgets::DrawKey(
+                icon, {},
                 {position.x + (width - UI::Widgets::KeyWidth(icon)) * .5F,
                  position.y + (height - 30.F) * .5F});
-            UI::Widgets::Key(icon, {});
-            ImGui::SetCursorScreenPos(after);
+            draw->PopClipRect();
           }
           ImGui::PopID();
         }

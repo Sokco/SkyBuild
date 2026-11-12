@@ -520,6 +520,25 @@ void Initialize() {
   REL::Relocation<std::uintptr_t> table{RE::VTABLE_ContainerMenu[0]};
   originalAccept = table.write_vfunc(1, AcceptMenu);
 }
+void Restore() {
+  const auto generation = epoch.load();
+  if (const auto tasks = SKSE::GetTaskInterface())
+    tasks->AddTask([generation] {
+      if (generation != epoch.load()) return;
+      auto *vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+      auto *policy = vm ? vm->GetObjectHandlePolicy() : nullptr;
+      if (!policy) return;
+      // OnLoad need not repeat for references restored in the saved cell.
+      for (const auto &ref : BuildingManager::GetResolvedPlacedObjects()) {
+        const auto *base = ref->GetBaseObject();
+        if (!base || !base->Is(RE::FormType::Container) || ref->IsDeleted()) continue;
+        RE::BSTSmartPointer<RE::BSScript::Object> script;
+        const auto handle = policy->GetHandleForObject(ref->GetFormType(), ref.get());
+        if (vm->FindBoundObject(handle, "SkyBuildCombinedWeaponRack", script))
+          Configure(nullptr, ref.get());
+      }
+    });
+}
 void Update() {
   if (racks.empty())
     return;

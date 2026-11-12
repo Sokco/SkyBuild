@@ -4,17 +4,19 @@
 #include <cstdint>
 #include <SKSE/InputMap.h>
 #include <atomic>
+#include <string>
+#include "building/InputChord.h"
 
 namespace SkyBuild::ControlBindings {
 inline std::atomic_bool gamepadInUse{false};
 struct InputBinding {
-  std::uint32_t code{};
-  const char *icon{""};
+  InputChord chord;
+  std::string icon;
 };
 struct Binding {
   InputBinding keyboardMouse{}, gamepad{};
   const char *Icon() const {
-    return (gamepadInUse.load() ? gamepad : keyboardMouse).icon;
+    return (gamepadInUse.load() ? gamepad : keyboardMouse).icon.c_str();
   }
 };
 
@@ -45,15 +47,28 @@ inline void ObserveEvent(const RE::InputEvent &event) {
       gamepadInUse.store(false);
   }
 }
-inline bool Matches(const RE::ButtonEvent &button, const Binding &binding) {
-  const auto &input = button.GetDevice() == RE::INPUT_DEVICE::kGamepad
-                          ? binding.gamepad : binding.keyboardMouse;
-  return input.code != 0 && InputCode(button) == input.code;
+struct Event {
+  const Binding *binding{};
+  std::uint32_t code{};
+  Input::Phase phase{};
+  float duration{};
+  bool IsDown() const { return phase == Input::Phase::Down; }
+  bool IsUp() const { return phase == Input::Phase::Up; }
+  bool IsPressed() const { return !IsUp(); }
+  float HeldDuration() const { return duration; }
+  RE::INPUT_DEVICE GetDevice() const {
+    return code >= 266 ? RE::INPUT_DEVICE::kGamepad :
+           code >= 256 ? RE::INPUT_DEVICE::kMouse : RE::INPUT_DEVICE::kKeyboard;
+  }
+  std::uint32_t GetIDCode() const {
+    if (code >= 266) return SKSE::InputMap::GamepadKeycodeToMask(code);
+    return code >= 256 ? code - 256 : code;
+  }
+};
+inline bool Matches(const Event &event, const Binding &binding) {
+  return event.binding == &binding;
 }
-inline Binding MakeBinding(std::uint32_t code, const char *icon,
-                           std::uint32_t gamepadCode, const char *gamepadIcon) {
-  return {{code, icon}, {gamepadCode, gamepadIcon}};
-}
+inline std::atomic_uint64_t revision{0};
 
 // Settings::Apply initializes both device bindings before input hooks are installed.
 inline std::array<Binding, 2> modifyControls{};
