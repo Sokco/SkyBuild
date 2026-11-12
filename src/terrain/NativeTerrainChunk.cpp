@@ -245,6 +245,7 @@ void InitializeTerrainWeldingPolicy() {
     return;
   const auto version = REL::Module::get().version();
   if (version != REL::Version(1, 5, 97, 0) &&
+      version != REL::Version(1, 6, 640, 0) &&
       version != REL::Version(1, 6, 1170, 0) &&
       version != REL::Version(1, 7, 104, 0)) {
     spdlog::warn("Terrain welding policy is not verified for this runtime.");

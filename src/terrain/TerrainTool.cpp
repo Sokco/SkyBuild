@@ -74,7 +74,8 @@ void InstallLoadRecoveryHook() {
   std::uintptr_t offset{};
   if (version == REL::Version(1, 5, 97, 0))
     offset = 0xB39;
-  else if (version == REL::Version(1, 6, 1170, 0))
+  else if (version == REL::Version(1, 6, 640, 0) ||
+           version == REL::Version(1, 6, 1170, 0))
     offset = 0xCD9;
   else if (version == REL::Version(1, 7, 104, 0))
     offset = 0xCEA;

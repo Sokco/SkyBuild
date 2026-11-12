@@ -94,9 +94,10 @@ SKSEPluginLoad(const SKSE::LoadInterface *a_skse) {
   const bool supportedSE = REL::Module::IsSE() &&
                            runtime == REL::Version{1, 5, 97, 0};
   const bool supportedAE = REL::Module::IsAE() &&
-                           runtime >= REL::Version{1, 6, 1170, 0};
+                           (runtime == REL::Version{1, 6, 640, 0} ||
+                            runtime >= REL::Version{1, 6, 1170, 0});
   if (!supportedSE && !supportedAE) {
-    spdlog::critical("SkyBuild requires Skyrim 1.5.97 or AE 1.6.1170 or newer.");
+    spdlog::critical("SkyBuild requires Skyrim 1.5.97, 1.6.640, or AE 1.6.1170 or newer.");
     return false;
   }
 

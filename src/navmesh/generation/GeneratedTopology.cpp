@@ -620,6 +620,15 @@ PartitionedMesh PreserveGeneratedTopology(
                 "Changed special portal requires native auxiliary mapping");
           auto &output = result.meshes.at(id);
           auto &face = output.triangles.at(static_cast<std::uint16_t>(index));
+          // Partitioning rebuilds ordinary adjacency only. Restore an authored
+          // special link only after both endpoint faces retain their identity.
+          if (!(face.flags & (1U << side)) && face.edges[side] == 0xFFFF) {
+            if (output.portals.size() >= 65535)
+              return fail("Native partition exceeds portal index limits");
+            face.edges[side] = static_cast<std::uint16_t>(output.portals.size());
+            face.flags |= static_cast<std::uint16_t>(1U << side);
+            output.portals.push_back(portal);
+          }
           if (!(face.flags & (1U << side)) ||
               output.portals.at(face.edges[side]) != portal)
             return fail(

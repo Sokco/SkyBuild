@@ -307,6 +307,7 @@ void Initialize() {
   const auto version = REL::Module::get().version();
   // Upload call offsets differ between SE and AE; allocator slots are shared.
   if (version != REL::Version(1, 5, 97, 0) &&
+      version != REL::Version(1, 6, 640, 0) &&
       version != REL::Version(1, 6, 1170, 0) &&
       version != REL::Version(1, 7, 104, 0)) {
     spdlog::warn("Terrain grass buffers are not verified for this runtime.");

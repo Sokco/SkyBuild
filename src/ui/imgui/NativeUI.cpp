@@ -409,6 +409,7 @@ bool Install() {
   const bool se = REL::Module::IsSE();
   if (REL::Module::IsVR() ||
       (version != REL::Version(1, 5, 97, 0) &&
+       version != REL::Version(1, 6, 640, 0) &&
        version != REL::Version(1, 6, 1170, 0) &&
        version != REL::Version(1, 7, 104, 0)))
     return false;
