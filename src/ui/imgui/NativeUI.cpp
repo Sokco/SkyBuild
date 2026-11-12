@@ -83,7 +83,7 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM w, LPARAM l) {
     clearInput.store(true);
   // Skyrim supplies keyboard, text, buttons and relative motion through its
   // input queue. Feeding WM_* too would duplicate clicks and characters.
-  return CallWindowProcW(originalWndProc, window, message, w, l);
+  return CallWindowProcA(originalWndProc, window, message, w, l);
 }
 
 bool InitializeRenderer() {
@@ -142,7 +142,7 @@ bool InitializeRenderer() {
     return false;
   }
   hwnd = desc.OutputWindow;
-  originalWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
+  originalWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrA(
       hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WindowProc)));
   RECT client{};
   GetClientRect(hwnd, &client);
